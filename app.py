@@ -26,15 +26,27 @@ def webhook():
     return 'OK'
 
 
+from linebot.models import MessageEvent, TextMessage, ImageSendMessage
+
+IMAGE_URL = "https://i.imgur.com/tdvjX6c.png"
+
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    text = event.message.text
+    text = event.message.text.strip()
 
-    line_bot_api.reply_message(
-        event.reply_token,
-        TextSendMessage(text=f"收到：{text}")
-    )
-
+    if text == "圖片":
+        line_bot_api.reply_message(
+            event.reply_token,
+            ImageSendMessage(
+                original_content_url=IMAGE_URL,
+                preview_image_url=IMAGE_URL
+            )
+        )
+    else:
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="輸入「圖片」看業績圖")
+        )
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
