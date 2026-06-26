@@ -57,8 +57,7 @@ HELP_TEXT = (
     "・業展處總覽 → 所有業展處業績卡片（含全國排名）\n"
     "・本月達成率排名 → 本月三項達成率地區排名\n"
     "・今日達成率排名 → 今日三項達成率地區排名\n"
-    "・今日速報 → 今日新增保費速報\n"
-    "・本月速報 → 本月累積保費速報"
+    "・今日速報 → 今日新增保費速報"
 )
 
 
@@ -485,21 +484,10 @@ def handle_message(event):
             event.reply_token,
             build_flex_from_source(data.get("today", data["regions"]), "📊 今日速報", "今日速報")
         )
-    elif text == "本月速報":
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=build_speed_report("regions", "本月累積速報"))
-        )
     elif text == "最新業績圖":
         line_bot_api.reply_message(
             event.reply_token,
             build_flex_message()
-        )
-    elif text == "最新業績":
-        reply = build_performance_text()
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text=reply)
         )
     elif text in REGION_DEPARTMENTS:
         line_bot_api.reply_message(
