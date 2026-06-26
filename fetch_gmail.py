@@ -8,6 +8,7 @@ import json
 import io
 from datetime import datetime, timezone, timedelta
 import openpyxl
+import xlrd
 
 GMAIL_USER = os.environ.get("GMAIL_USER", "wangnanshan33@gmail.com")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
@@ -33,14 +34,14 @@ def get_latest_excel():
     _, data = mail.search(None, f'(OR FROM "{SENDERS[0]}" FROM "{SENDERS[1]}")')
     mail_ids = data[0].split()
 
-    # 從最新往舊找，找到第一封含 xlsx 的信
+    # 從最新往舊找，找到第一封含 xlsx 或 xls 的信
     for mail_id in reversed(mail_ids):
         _, msg_data = mail.fetch(mail_id, "(RFC822)")
         msg = email.message_from_bytes(msg_data[0][1])
 
         for part in msg.walk():
             filename = part.get_filename()
-            if filename and filename.endswith(".xlsx"):
+            if filename and (filename.endswith(".xlsx") or filename.endswith(".xls")):
                 print(f"找到附件：{filename}")
                 file_bytes = part.get_payload(decode=True)
                 mail.logout()
@@ -48,6 +49,24 @@ def get_latest_excel():
 
     mail.logout()
     return None, None
+
+
+def parse_xls(file_bytes):
+    """解析舊版 .xls 格式"""
+    wb = xlrd.open_workbook(file_contents=file_bytes.read())
+    ws = wb.sheet_by_index(0)
+    results = {}
+    for row_idx in range(1, ws.nrows):
+        row = ws.row_values(row_idx)
+        region = str(row[0]).strip() if row[0] else ""
+        if region in REGIONS:
+            results[region] = {
+                "實收保費": str(row[1]) if row[1] != "" else "－",
+                "實收達成率": str(row[2]) if row[2] != "" else "－",
+                "加權保費": str(row[3]) if row[3] != "" else "－",
+                "加權保費達成率": str(row[4]) if row[4] != "" else "－",
+            }
+    return results
 
 
 def parse_excel(file_bytes):
@@ -103,7 +122,10 @@ def main():
 
     file_bytes, filename = get_latest_excel()
     if file_bytes:
-        region_data = parse_excel(file_bytes)
+        if filename.endswith(".xls"):
+            region_data = parse_xls(file_bytes)
+        else:
+            region_data = parse_excel(file_bytes)
         if region_data:
             update_performance(region_data)
         else:

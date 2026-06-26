@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 安裝 Python 套件
-        run: pip install google-auth google-auth-oauthlib google-api-python-client openpyxl
+        run: pip install google-auth google-auth-oauthlib google-api-python-client openpyxl xlrd
 
       - name: 抓取 Gmail 最新 Excel 並更新業績資料
         env:
