@@ -23,8 +23,14 @@ def get_latest_excel():
     mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
     mail.select("inbox")
 
-    # 搜尋含附件的信（最新一封）
-    _, data = mail.search(None, 'ALL')
+    # 只搜尋指定寄件者的信
+    SENDERS = [
+        "Jessica-YC.Lu@nanshan.com.tw",
+        "c5268326@gmail.com",
+    ]
+    search_query = " ".join([f'FROM "{s}"' for s in SENDERS])
+    # IMAP OR 語法
+    _, data = mail.search(None, f'(OR FROM "{SENDERS[0]}" FROM "{SENDERS[1]}")')
     mail_ids = data[0].split()
 
     # 從最新往舊找，找到第一封含 xlsx 的信
