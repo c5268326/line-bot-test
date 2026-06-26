@@ -210,13 +210,10 @@ def build_speed_report(source_key, label):
     )
 
 
-def build_flex_message():
+def build_flex_from_source(source_regions, title, alt_text):
     data = load_performance()
-    TW = timezone(timedelta(hours=8))
     updated = data.get("updated_at", "－")
-
-    region_blocks = [build_region_row(r, v) for r, v in data["regions"].items()]
-
+    region_blocks = [build_region_row(r, v) for r, v in source_regions.items()]
     bubble = {
         "type": "bubble",
         "size": "mega",
@@ -224,7 +221,7 @@ def build_flex_message():
             "type": "box",
             "layout": "vertical",
             "contents": [
-                {"type": "text", "text": "📊 今日最新業績速報", "weight": "bold", "size": "lg", "color": "#ffffff"},
+                {"type": "text", "text": title, "weight": "bold", "size": "lg", "color": "#ffffff"},
                 {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#dddddd", "margin": "xs"},
             ],
             "backgroundColor": "#1a5276",
@@ -238,8 +235,12 @@ def build_flex_message():
             "spacing": "none",
         },
     }
+    return FlexSendMessage(alt_text=alt_text, contents=bubble)
 
-    return FlexSendMessage(alt_text="最新業績總覽", contents=bubble)
+
+def build_flex_message():
+    data = load_performance()
+    return build_flex_from_source(data["regions"], "📊 今日最新業績速報", "最新業績總覽")
 
 
 def build_performance_text():
@@ -299,9 +300,10 @@ def handle_message(event):
             TextSendMessage(text=build_ranking_text())
         )
     elif text == "今日速報":
+        data = load_performance()
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=build_speed_report("today", "今日速報"))
+            build_flex_from_source(data.get("today", data["regions"]), "📊 今日速報", "今日速報")
         )
     elif text == "本月速報":
         line_bot_api.reply_message(
