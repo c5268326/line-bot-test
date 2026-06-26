@@ -3,6 +3,7 @@
 """
 import imaplib
 import email
+from email.header import decode_header
 import os
 import json
 import io
@@ -50,10 +51,17 @@ def get_latest_excel():
 
         has_attachment = False
         for part in msg.walk():
-            filename = part.get_filename()
-            if filename:
-                has_attachment = True
-                print(f"信件寄件者：{sender}，主旨：{subject}，附件：{filename}")
+            raw_filename = part.get_filename()
+            if raw_filename:
+                # 解碼 MIME 編碼的檔名（如 =?UTF-8?B?...?=）
+                decoded_parts = decode_header(raw_filename)
+                filename = ""
+                for part_bytes, charset in decoded_parts:
+                    if isinstance(part_bytes, bytes):
+                        filename += part_bytes.decode(charset or "utf-8", errors="replace")
+                    else:
+                        filename += part_bytes
+                print(f"信件寄件者：{sender}，附件：{filename}")
                 if filename.endswith(".xlsx") or filename.endswith(".xls"):
                     print(f"找到目標附件：{filename}")
                     file_bytes = part.get_payload(decode=True)
