@@ -1,8 +1,9 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage
 import os
+import threading
 
 app = Flask(__name__)
 
@@ -11,6 +12,22 @@ CHANNEL_SECRET = "4a8fa39b484f6ef050fb4c9eb729b4ae"
 
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
+
+# 各地區業績報表圖片固定網址（後續可替換更新）
+REGION_IMAGES = {
+    "北一": "https://i.imgur.com/tdvjX6c.png",
+    "北二": "https://i.imgur.com/tdvjX6c.png",
+    "中區": "https://i.imgur.com/tdvjX6c.png",
+}
+
+HELP_TEXT = "請輸入地區關鍵字查看業績報表：\n・北一\n・北二\n・中區"
+
+
+def reply_async(reply_token, messages):
+    """在獨立 thread 中回覆，避免 webhook 逾時造成 service is busy"""
+    t = threading.Thread(target=line_bot_api.reply_message, args=(reply_token, messages))
+    t.daemon = True
+    t.start()
 
 
 @app.route("/webhook", methods=["POST"])
@@ -23,30 +40,29 @@ def webhook():
     except InvalidSignatureError:
         abort(400)
 
+    # 立即回 200，避免 LINE 判定 service is busy
     return 'OK'
 
-
-from linebot.models import MessageEvent, TextMessage, ImageSendMessage
-
-IMAGE_URL = "https://i.imgur.com/tdvjX6c.png"
 
 @handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     text = event.message.text.strip()
 
-    if text == "圖片":
-        line_bot_api.reply_message(
+    if text in REGION_IMAGES:
+        url = REGION_IMAGES[text]
+        reply_async(
             event.reply_token,
             ImageSendMessage(
-                original_content_url=IMAGE_URL,
-                preview_image_url=IMAGE_URL
+                original_content_url=url,
+                preview_image_url=url
             )
         )
     else:
-        line_bot_api.reply_message(
+        reply_async(
             event.reply_token,
-            TextSendMessage(text="輸入「圖片」看業績圖")
+            TextSendMessage(text=HELP_TEXT)
         )
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
