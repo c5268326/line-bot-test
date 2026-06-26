@@ -113,15 +113,24 @@ def progress_bar(rate_float, national_rate=None):
     }
 
 
-def build_region_row(region, values):
-    """產生單一地區的 Flex 區塊"""
-    def row(label, val):
+def build_region_row(region, values, national=None):
+    """產生單一地區的 Flex 區塊，national 傳入全國數值用於達成率比較"""
+    def rate_color(val, nat_key):
+        if region == "全國" or national is None:
+            return "#111111"
+        f = parse_rate_float(val)
+        nf = parse_rate_float(national.get(nat_key, "0"))
+        if f is not None and nf is not None and f < nf:
+            return "#e74c3c"
+        return "#111111"
+
+    def row(label, val, color="#111111"):
         return {
             "type": "box",
             "layout": "horizontal",
             "contents": [
                 {"type": "text", "text": label, "size": "sm", "color": "#555555", "flex": 3},
-                {"type": "text", "text": val, "size": "sm", "color": "#111111", "flex": 4, "align": "end", "weight": "bold"},
+                {"type": "text", "text": val, "size": "sm", "color": color, "flex": 4, "align": "end", "weight": "bold"},
             ],
             "margin": "xs",
         }
@@ -129,11 +138,11 @@ def build_region_row(region, values):
     contents = [
         {"type": "text", "text": f"【{region}】", "weight": "bold", "size": "md", "color": "#1a5276", "margin": "md"},
         row("實收保費", fmt_amount(values["實收保費"])),
-        row("實收達成率", fmt_rate(values["實收達成率"])),
+        row("實收達成率", fmt_rate(values["實收達成率"]), rate_color(values["實收達成率"], "實收達成率")),
         row("A&H保費", fmt_amount(values.get("A&H保費", "－"))),
-        row("A&H達成率", fmt_rate(values.get("A&H達成率", "－"))),
+        row("A&H達成率", fmt_rate(values.get("A&H達成率", "－")), rate_color(values.get("A&H達成率", "－"), "A&H達成率")),
         row("RP保費", fmt_amount(values.get("RP保費", "－"))),
-        row("RP達成率", fmt_rate(values.get("RP達成率", "－"))),
+        row("RP達成率", fmt_rate(values.get("RP達成率", "－")), rate_color(values.get("RP達成率", "－"), "RP達成率")),
         {"type": "separator", "margin": "md"},
     ]
 
@@ -190,17 +199,17 @@ def build_ranking_flex():
         for i, (r, f) in enumerate(scored):
             emoji = RANK_EMOJI[i] if i < len(RANK_EMOJI) else f"{i+1}."
             short = REGION_SHORT.get(r, r)
+            rate_color = "#e74c3c" if (national_f is not None and f < national_f) else "#111111"
             rows.append({
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
                     {"type": "text", "text": emoji, "size": "sm", "flex": 1},
                     {"type": "text", "text": short, "size": "sm", "color": "#333333", "flex": 3},
-                    {"type": "text", "text": fmt_rate(f), "size": "sm", "color": "#111111", "flex": 3, "align": "end", "weight": "bold"},
+                    {"type": "text", "text": fmt_rate(f), "size": "sm", "color": rate_color, "flex": 3, "align": "end", "weight": "bold"},
                 ],
                 "margin": "xs",
             })
-            rows.append(progress_bar(f, national_rate=national_f))
         rows.append({"type": "separator", "margin": "md"})
         return rows
 
@@ -257,7 +266,8 @@ def build_speed_report(source_key, label):
 def build_flex_from_source(source_regions, title, alt_text):
     data = load_performance()
     updated = data.get("updated_at", "－")
-    region_blocks = [build_region_row(r, v) for r, v in source_regions.items()]
+    national = source_regions.get("全國", {})
+    region_blocks = [build_region_row(r, v, national=national) for r, v in source_regions.items()]
     bubble = {
         "type": "bubble",
         "size": "mega",
