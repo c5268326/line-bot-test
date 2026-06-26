@@ -38,7 +38,8 @@ HELP_TEXT = (
     "・台北一區 / 桃竹苗區 / 中部地區 / 南部地區 / 台北二區 → 業績報表圖片\n"
     "・最新業績 → 查詢各地區業績數字\n"
     "・最新業績圖 → 業績卡片總覽\n"
-    "・達成率排名 → 三項達成率地區排名\n"
+    "・本月達成率排名 → 本月三項達成率地區排名\n"
+    "・今日達成率排名 → 今日三項達成率地區排名\n"
     "・今日速報 → 今日新增保費速報\n"
     "・本月速報 → 本月累積保費速報"
 )
@@ -170,32 +171,33 @@ def to_yi(val):
         return val
 
 
-def build_ranking_flex():
+def build_ranking_flex(source_key="regions", title="📊 本月達成率排名"):
     data = load_performance()
-    regions = {r: v for r, v in data["regions"].items() if r != "全國"}
+    source = data.get(source_key, data["regions"])
+    regions = {r: v for r, v in source.items() if r != "全國"}
     updated = data.get("updated_at", "－")
 
-    def rank_section_block(title, key):
+    def rank_section_block(section_title, key):
         scored = []
         for r, v in regions.items():
             f = parse_rate_float(v.get(key, "0"))
             if f is not None:
                 scored.append((r, f))
         scored.sort(key=lambda x: x[1], reverse=True)
-        national_rate = fmt_rate(data["regions"].get("全國", {}).get(key, "0"))
+        national_rate = fmt_rate(source.get("全國", {}).get(key, "0"))
+        national_f = parse_rate_float(source.get("全國", {}).get(key, "0"))
 
         rows = [
             {
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
-                    {"type": "text", "text": f"🔥 {title}", "weight": "bold", "size": "sm", "color": "#1a5276", "flex": 5},
+                    {"type": "text", "text": f"🔥 {section_title}", "weight": "bold", "size": "sm", "color": "#1a5276", "flex": 5},
                     {"type": "text", "text": f"全國 {national_rate}", "size": "sm", "color": "#555555", "flex": 3, "align": "end"},
                 ],
                 "margin": "md",
             }
         ]
-        national_f = parse_rate_float(data["regions"].get("全國", {}).get(key, "0"))
         for i, (r, f) in enumerate(scored):
             emoji = RANK_EMOJI[i] if i < len(RANK_EMOJI) else f"{i+1}."
             short = REGION_SHORT.get(r, r)
@@ -214,8 +216,8 @@ def build_ranking_flex():
         return rows
 
     body_contents = []
-    for title, key in [("A&H達成率", "A&H達成率"), ("RP達成率", "RP達成率"), ("實收達成率", "實收達成率")]:
-        body_contents.extend(rank_section_block(title, key))
+    for section_title, key in [("A&H達成率", "A&H達成率"), ("RP達成率", "RP達成率"), ("實收達成率", "實收達成率")]:
+        body_contents.extend(rank_section_block(section_title, key))
 
     bubble = {
         "type": "bubble",
@@ -224,7 +226,7 @@ def build_ranking_flex():
             "type": "box",
             "layout": "vertical",
             "contents": [
-                {"type": "text", "text": "📊 達成率排名", "weight": "bold", "size": "lg", "color": "#ffffff"},
+                {"type": "text", "text": title, "weight": "bold", "size": "lg", "color": "#ffffff"},
                 {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#dddddd", "margin": "xs"},
             ],
             "backgroundColor": "#1a5276",
@@ -238,7 +240,7 @@ def build_ranking_flex():
             "spacing": "none",
         },
     }
-    return FlexSendMessage(alt_text="達成率排名", contents=bubble)
+    return FlexSendMessage(alt_text=title, contents=bubble)
 
 
 def build_speed_report(source_key, label):
@@ -348,10 +350,15 @@ def webhook():
 def handle_message(event):
     text = event.message.text.strip()
 
-    if text == "達成率排名":
+    if text == "本月達成率排名":
         line_bot_api.reply_message(
             event.reply_token,
-            build_ranking_flex()
+            build_ranking_flex("regions", "📊 本月達成率排名")
+        )
+    elif text == "今日達成率排名":
+        line_bot_api.reply_message(
+            event.reply_token,
+            build_ranking_flex("today", "📊 今日達成率排名")
         )
     elif text == "今日速報":
         data = load_performance()
