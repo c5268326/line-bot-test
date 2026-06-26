@@ -1,5 +1,5 @@
 """
-用 IMAP 抓取最新業績 Excel，解析後更新 performance.json
+用 IMAP 抓取最新業績 Excel，解析後更新 performance.json，並廣播推播最新業績
 """
 import imaplib
 import email
@@ -7,12 +7,17 @@ from email.header import decode_header
 import os
 import json
 import io
+import requests
 from datetime import datetime, timezone, timedelta
 import openpyxl
 import xlrd
 
 GMAIL_USER = os.environ.get("GMAIL_USER", "wangnanshan33@gmail.com")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get(
+    "LINE_CHANNEL_ACCESS_TOKEN",
+    "SFqZWlkhtiRJXJNHgjO6PEqeHbmgIq3Ww2fO5kiq/25W+8CjFF9bApG9e9/VzuAJSZlPsSs/VUEFWAos4nyKOzAihgrzfkjCz8kxcb7w7ogiw01htnA65RIziuKn/hlaVCjwZCu8orjs0IH0hxY1ZQdB04t89/1O/w1cDnyilFU="
+)
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "data", "performance.json")
 
@@ -214,6 +219,116 @@ def update_performance(monthly, today):
     print("performance.json 已更新")
 
 
+def fmt_amount(val):
+    try:
+        n = float(str(val).replace(",", ""))
+        return f"{n:,.0f}"
+    except (ValueError, TypeError):
+        return val
+
+
+def fmt_rate(val):
+    s = str(val).strip()
+    if s in ("－", "", "None"):
+        return "－"
+    if "%" in s:
+        try:
+            return f"{float(s.replace('%', '')):.1f}%"
+        except ValueError:
+            return s
+    try:
+        n = float(s)
+        if n <= 1.5:
+            return f"{n * 100:.1f}%"
+        return f"{n:.1f}%"
+    except ValueError:
+        return s
+
+
+def parse_rate_float(val):
+    s = str(val).strip().replace("%", "")
+    try:
+        n = float(s)
+        return n / 100 if n > 1.5 else n
+    except ValueError:
+        return None
+
+
+def broadcast_performance():
+    """廣播最新業績 Flex Message 給所有使用者"""
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    regions = data.get("regions", {})
+    updated = data.get("updated_at", "－")
+    national = regions.get("全國", {})
+
+    def rate_color(val, nat_key):
+        f = parse_rate_float(val)
+        nf = parse_rate_float(national.get(nat_key, "0"))
+        if f is not None and nf is not None and f < nf:
+            return "#e74c3c"
+        return "#111111"
+
+    def make_row(label, amount, rate_val, nat_key, is_national=False):
+        color = "#111111" if is_national else rate_color(rate_val, nat_key)
+        return {
+            "type": "box", "layout": "horizontal",
+            "contents": [
+                {"type": "text", "text": label, "size": "sm", "color": "#666666", "flex": 2},
+                {"type": "text", "text": fmt_amount(amount), "size": "sm", "color": "#222222", "flex": 4, "align": "end", "weight": "bold"},
+                {"type": "text", "text": fmt_rate(rate_val), "size": "sm", "color": color, "flex": 3, "align": "end", "weight": "bold"},
+            ],
+            "margin": "xs",
+        }
+
+    blocks = []
+    for region, vals in regions.items():
+        is_nat = (region == "全國")
+        blocks.append({"type": "text", "text": f"【{region}】", "weight": "bold", "size": "md", "color": "#1a5276", "margin": "md"})
+        blocks.append(make_row("實收", vals.get("實收保費", "－"), vals.get("實收達成率", "－"), "實收達成率", is_nat))
+        blocks.append(make_row("A&H", vals.get("A&H保費", "－"), vals.get("A&H達成率", "－"), "A&H達成率", is_nat))
+        blocks.append(make_row("RP", vals.get("RP保費", "－"), vals.get("RP達成率", "－"), "RP達成率", is_nat))
+        blocks.append({"type": "separator", "margin": "md"})
+
+    flex_message = {
+        "type": "flex",
+        "altText": "📊 最新業績更新通知",
+        "contents": {
+            "type": "bubble",
+            "size": "mega",
+            "header": {
+                "type": "box", "layout": "vertical",
+                "contents": [
+                    {"type": "text", "text": "📊 最新業績更新通知", "weight": "bold", "size": "lg", "color": "#1a5276"},
+                    {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#888888", "margin": "xs"},
+                ],
+                "backgroundColor": "#EBF5FB",
+                "paddingAll": "16px",
+            },
+            "body": {
+                "type": "box", "layout": "vertical",
+                "contents": blocks,
+                "paddingAll": "12px",
+                "spacing": "none",
+            },
+        },
+    }
+
+    resp = requests.post(
+        "https://api.line.me/v2/bot/message/broadcast",
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+        },
+        json={"messages": [flex_message]},
+    )
+    if resp.status_code == 200:
+        print("✅ 廣播推播成功")
+    else:
+        print(f"⚠️ 廣播推播失敗：{resp.status_code} {resp.text}")
+
+
 def main():
     if not GMAIL_APP_PASSWORD:
         print("❌ 未設定 GMAIL_APP_PASSWORD 環境變數")
@@ -227,6 +342,7 @@ def main():
             monthly, today = parse_excel(file_bytes)
         if monthly:
             update_performance(monthly, today)
+            broadcast_performance()
         else:
             print("⚠️ Excel 內找不到對應地區資料，請確認欄位格式")
     else:

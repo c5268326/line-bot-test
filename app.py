@@ -463,7 +463,11 @@ def webhook():
 def handle_message(event):
     text = event.message.text.strip()
 
-    if text == "業展處總覽":
+    if text == "群組ID":
+        source = event.source
+        gid = getattr(source, "group_id", None) or getattr(source, "room_id", None) or source.user_id
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"ID：{gid}"))
+    elif text == "業展處總覽":
         line_bot_api.reply_message(
             event.reply_token,
             build_all_depts_flex()
