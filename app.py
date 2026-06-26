@@ -318,20 +318,15 @@ def build_region_detail_flex(region):
         build_region_row(region, region_vals, national=national),
     ])
 
-    all_bubbles = [bubble1]
-    for i in range(0, len(dept_names), 4):
-        chunk = dept_names[i:i+4]
-        blocks = []
-        for dept in chunk:
-            manager = DEPARTMENT_MANAGERS.get(dept, "")
-            values = dept_data.get(dept, {})
-            blocks.append(build_region_row(dept, values, national=national, subtitle=manager))
-        suffix = f"（{i//4 + 1}）" if len(dept_names) > 4 else ""
-        all_bubbles.append(make_bubble(f"📊 {region} 業展處{suffix}", blocks))
+    dept_blocks = []
+    for dept in dept_names:
+        manager = DEPARTMENT_MANAGERS.get(dept, "")
+        values = dept_data.get(dept, {})
+        label = f"{dept}　{manager}" if manager else dept
+        dept_blocks.append(build_region_row(label, values, national=national))
+    bubble2 = make_bubble(f"📊 {region} 業展處", dept_blocks)
 
-    if len(all_bubbles) == 1:
-        return FlexSendMessage(alt_text=f"{region}業績詳情", contents=all_bubbles[0])
-    return FlexSendMessage(alt_text=f"{region}業績詳情", contents={"type": "carousel", "contents": all_bubbles})
+    return FlexSendMessage(alt_text=f"{region}業績詳情", contents={"type": "carousel", "contents": [bubble1, bubble2]})
 
 
 def build_flex_from_source(source_regions, title, alt_text):
