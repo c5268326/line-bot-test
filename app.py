@@ -161,31 +161,73 @@ def to_yi(val):
         return val
 
 
-def build_ranking_text():
+def build_ranking_flex():
     data = load_performance()
     regions = {r: v for r, v in data["regions"].items() if r != "全國"}
     updated = data.get("updated_at", "－")
 
-    def rank_section(title, key):
+    def rank_section_block(title, key):
         scored = []
         for r, v in regions.items():
             f = parse_rate_float(v.get(key, "0"))
             if f is not None:
                 scored.append((r, f))
         scored.sort(key=lambda x: x[1], reverse=True)
-        lines = [f"🔥 {title}（全國 {fmt_rate(data['regions'].get('全國', {}).get(key, '0'))}）"]
+        national_rate = fmt_rate(data["regions"].get("全國", {}).get(key, "0"))
+
+        rows = [
+            {
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                    {"type": "text", "text": f"🔥 {title}", "weight": "bold", "size": "sm", "color": "#1a5276", "flex": 5},
+                    {"type": "text", "text": f"全國 {national_rate}", "size": "sm", "color": "#555555", "flex": 3, "align": "end"},
+                ],
+                "margin": "md",
+            }
+        ]
         for i, (r, f) in enumerate(scored):
             emoji = RANK_EMOJI[i] if i < len(RANK_EMOJI) else f"{i+1}."
-            lines.append(f"{emoji} {REGION_SHORT.get(r, r)}　{fmt_rate(f)}")
-        return "\n".join(lines)
+            short = REGION_SHORT.get(r, r)
+            rows.append({
+                "type": "box",
+                "layout": "horizontal",
+                "contents": [
+                    {"type": "text", "text": emoji, "size": "sm", "flex": 1},
+                    {"type": "text", "text": short, "size": "sm", "color": "#333333", "flex": 3},
+                    {"type": "text", "text": fmt_rate(f), "size": "sm", "color": "#111111", "flex": 3, "align": "end", "weight": "bold"},
+                ],
+                "margin": "xs",
+            })
+        rows.append({"type": "separator", "margin": "md"})
+        return rows
 
-    sections = [
-        f"📊 達成率排名\n截至 {updated}",
-        rank_section("A&H達成率", "A&H達成率"),
-        rank_section("RP達成率", "RP達成率"),
-        rank_section("實收達成率", "實收達成率"),
-    ]
-    return "\n\n".join(sections)
+    body_contents = []
+    for title, key in [("A&H達成率", "A&H達成率"), ("RP達成率", "RP達成率"), ("實收達成率", "實收達成率")]:
+        body_contents.extend(rank_section_block(title, key))
+
+    bubble = {
+        "type": "bubble",
+        "size": "mega",
+        "header": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {"type": "text", "text": "📊 達成率排名", "weight": "bold", "size": "lg", "color": "#ffffff"},
+                {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#dddddd", "margin": "xs"},
+            ],
+            "backgroundColor": "#1a5276",
+            "paddingAll": "16px",
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": body_contents,
+            "paddingAll": "12px",
+            "spacing": "none",
+        },
+    }
+    return FlexSendMessage(alt_text="達成率排名", contents=bubble)
 
 
 def build_speed_report(source_key, label):
@@ -297,7 +339,7 @@ def handle_message(event):
     if text == "達成率排名":
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=build_ranking_text())
+            build_ranking_flex()
         )
     elif text == "今日速報":
         data = load_performance()
