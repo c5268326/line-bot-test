@@ -3,12 +3,17 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage
 import os
-import threading
 
 app = Flask(__name__)
 
-CHANNEL_ACCESS_TOKEN = "SFqZWlkhtiRJXJNHgjO6PEqeHbmgIq3Ww2fO5kiq/25W+8CjFF9bApG9e9/VzuAJSZlPsSs/VUEFWAos4nyKOzAihgrzfkjCz8kxcb7w7ogiw01htnA65RIziuKn/hlaVCjwZCu8orjs0IH0hxY1ZQdB04t89/1O/w1cDnyilFU="
-CHANNEL_SECRET = "4a8fa39b484f6ef050fb4c9eb729b4ae"
+CHANNEL_ACCESS_TOKEN = os.environ.get(
+    "LINE_CHANNEL_ACCESS_TOKEN",
+    "SFqZWlkhtiRJXJNHgjO6PEqeHbmgIq3Ww2fO5kiq/25W+8CjFF9bApG9e9/VzuAJSZlPsSs/VUEFWAos4nyKOzAihgrzfkjCz8kxcb7w7ogiw01htnA65RIziuKn/hlaVCjwZCu8orjs0IH0hxY1ZQdB04t89/1O/w1cDnyilFU="
+)
+CHANNEL_SECRET = os.environ.get(
+    "LINE_CHANNEL_SECRET",
+    "4a8fa39b484f6ef050fb4c9eb729b4ae"
+)
 
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
@@ -23,16 +28,14 @@ REGION_IMAGES = {
 HELP_TEXT = "請輸入地區關鍵字查看業績報表：\n・北一\n・北二\n・中區"
 
 
-def reply_async(reply_token, messages):
-    """在獨立 thread 中回覆，避免 webhook 逾時造成 service is busy"""
-    t = threading.Thread(target=line_bot_api.reply_message, args=(reply_token, messages))
-    t.daemon = True
-    t.start()
+@app.route("/", methods=["GET"])
+def index():
+    return "LINE Bot is running."
 
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
-    signature = request.headers['X-Line-Signature']
+    signature = request.headers.get("X-Line-Signature", "")
     body = request.get_data(as_text=True)
 
     try:
@@ -40,8 +43,7 @@ def webhook():
     except InvalidSignatureError:
         abort(400)
 
-    # 立即回 200，避免 LINE 判定 service is busy
-    return 'OK'
+    return "OK"
 
 
 @handler.add(MessageEvent, message=TextMessage)
@@ -50,7 +52,7 @@ def handle_message(event):
 
     if text in REGION_IMAGES:
         url = REGION_IMAGES[text]
-        reply_async(
+        line_bot_api.reply_message(
             event.reply_token,
             ImageSendMessage(
                 original_content_url=url,
@@ -58,7 +60,7 @@ def handle_message(event):
             )
         )
     else:
-        reply_async(
+        line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text=HELP_TEXT)
         )
