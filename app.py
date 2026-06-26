@@ -1,7 +1,7 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage, FlexSendMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage, FlexSendMessage, StickerSendMessage
 import os
 import json
 from datetime import datetime, timezone, timedelta
@@ -57,7 +57,9 @@ HELP_TEXT = (
     "・業展處總覽 → 所有業展處業績卡片（含全國排名）\n"
     "・本月達成率排名 → 本月三項達成率地區排名\n"
     "・今日達成率排名 → 今日三項達成率地區排名\n"
-    "・今日速報 → 今日新增保費速報"
+    "・今日速報 → 今日新增保費速報\n"
+    "・達標 → 業展處達標狀況 + 動態慶祝\n"
+    "・趨勢比較 → 今日 vs 昨日達成率變化（▲▼）"
 )
 
 
@@ -412,6 +414,145 @@ def build_flex_message():
     return build_flex_from_source(data["regions"], "📊 今日最新業績速報", "最新業績總覽")
 
 
+def trend_arrow(current_val, prev_val):
+    """比較今日 vs 昨日達成率，回傳 ▲/▼/－ 及顏色"""
+    c = parse_rate_float(current_val)
+    p = parse_rate_float(prev_val)
+    if c is None or p is None:
+        return "", "#888888"
+    diff = c - p
+    if diff > 0.001:
+        return f" ▲{diff*100:.1f}%", "#27ae60"
+    elif diff < -0.001:
+        return f" ▼{abs(diff)*100:.1f}%", "#e74c3c"
+    return " →", "#888888"
+
+
+def build_trend_flex():
+    """今日 vs 昨日達成率趨勢比較"""
+    data = load_performance()
+    today = data.get("today", {})
+    yesterday = data.get("yesterday", {})
+    regions_data = data.get("regions", {})
+    updated = data.get("updated_at", "－")
+
+    if not today:
+        return None
+
+    blocks = []
+    for region in ["全國", "台北一區", "台北二區", "桃竹苗區", "中部地區", "南部地區"]:
+        t_vals = today.get(region, {})
+        y_vals = yesterday.get(region, {})
+        if not t_vals:
+            continue
+
+        blocks.append({
+            "type": "text", "text": f"【{region}】",
+            "weight": "bold", "size": "sm", "color": "#1a5276", "margin": "md"
+        })
+
+        for label, key in [("實收", "實收達成率"), ("A&H", "A&H達成率"), ("RP", "RP達成率")]:
+            cur = t_vals.get(key, "－")
+            prev = y_vals.get(key, "－")
+            arrow, arrow_color = trend_arrow(cur, prev)
+            blocks.append({
+                "type": "box", "layout": "horizontal",
+                "contents": [
+                    {"type": "text", "text": label, "size": "sm", "color": "#666666", "flex": 2},
+                    {"type": "text", "text": fmt_rate(cur), "size": "sm", "color": "#222222", "flex": 3, "align": "end", "weight": "bold"},
+                    {"type": "text", "text": arrow if arrow else "－", "size": "sm", "color": arrow_color, "flex": 4, "align": "end"},
+                ],
+                "margin": "xs",
+            })
+        blocks.append({"type": "separator", "margin": "sm"})
+
+    if not blocks:
+        return None
+
+    bubble = {
+        "type": "bubble", "size": "mega",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "contents": [
+                {"type": "text", "text": "📈 今日 vs 昨日 趨勢比較", "weight": "bold", "size": "lg", "color": "#1a5276"},
+                {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#888888", "margin": "xs"},
+            ],
+            "backgroundColor": "#EBF5FB", "paddingAll": "16px",
+        },
+        "body": {
+            "type": "box", "layout": "vertical",
+            "contents": blocks, "paddingAll": "12px", "spacing": "none",
+        },
+    }
+    return FlexSendMessage(alt_text="今日 vs 昨日趨勢比較", contents=bubble)
+
+
+def build_achieved_flex():
+    """達標業展處（實收達成率 ≥ 100%）"""
+    data = load_performance()
+    all_rankings = calc_dept_rankings(data)
+    updated = data.get("updated_at", "－")
+    national = data["regions"].get("全國", {})
+    nat_rate = parse_rate_float(national.get("實收達成率", "0")) or 0
+
+    achieved = []
+    not_achieved = []
+    for region, depts in REGION_DEPARTMENTS.items():
+        dept_data = data.get("departments", {}).get(region, {})
+        for dept in depts:
+            vals = dept_data.get(dept, {})
+            f = parse_rate_float(vals.get("實收達成率", "0"))
+            manager = DEPARTMENT_MANAGERS.get(dept, "")
+            label = f"{dept}　{manager}" if manager else dept
+            rank = all_rankings.get(dept, {}).get("實收達成率")
+            CIRCLE_NUMS = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳","㉑","㉒","㉓","㉔","㉕","㉖","㉗","㉘","㉙","㉚"]
+            rank_text = f" {CIRCLE_NUMS[rank-1]}" if rank and rank <= len(CIRCLE_NUMS) else ""
+            rate_text = fmt_rate(vals.get("實收達成率", "－")) + rank_text
+            if f is not None and f >= 1.0:
+                achieved.append((label, rate_text, "#27ae60"))
+            else:
+                not_achieved.append((label, rate_text, "#e74c3c" if f is not None and f < nat_rate else "#555555"))
+
+    def make_rows(items):
+        rows = []
+        for label, rate, color in items:
+            rows.append({
+                "type": "box", "layout": "horizontal",
+                "contents": [
+                    {"type": "text", "text": label, "size": "sm", "color": "#333333", "flex": 6},
+                    {"type": "text", "text": rate, "size": "sm", "color": color, "flex": 3, "align": "end", "weight": "bold"},
+                ],
+                "margin": "xs",
+            })
+        return rows
+
+    body = []
+    if achieved:
+        body.append({"type": "text", "text": "🏆 已達標", "weight": "bold", "size": "sm", "color": "#27ae60", "margin": "md"})
+        body.extend(make_rows(achieved))
+        body.append({"type": "separator", "margin": "md"})
+    if not_achieved:
+        body.append({"type": "text", "text": "⚡ 未達標", "weight": "bold", "size": "sm", "color": "#e74c3c", "margin": "md"})
+        body.extend(make_rows(not_achieved))
+
+    bubble = {
+        "type": "bubble", "size": "mega",
+        "header": {
+            "type": "box", "layout": "vertical",
+            "contents": [
+                {"type": "text", "text": "🎯 實收達成率 達標狀況", "weight": "bold", "size": "lg", "color": "#1a5276"},
+                {"type": "text", "text": f"達標基準：100% ｜ 截至 {updated}", "size": "xs", "color": "#888888", "margin": "xs"},
+            ],
+            "backgroundColor": "#EBF5FB", "paddingAll": "16px",
+        },
+        "body": {
+            "type": "box", "layout": "vertical",
+            "contents": body, "paddingAll": "12px", "spacing": "none",
+        },
+    }
+    return FlexSendMessage(alt_text="達標狀況一覽", contents=bubble)
+
+
 def build_performance_text():
     data = load_performance()
     TW = timezone(timedelta(hours=8))
@@ -463,7 +604,18 @@ def webhook():
 def handle_message(event):
     text = event.message.text.strip()
 
-    if text == "群組ID":
+    if text == "達標":
+        flex_msg = build_achieved_flex()
+        # LINE 官方動態貼圖（Lottie 渲染）：package 11537 Brown & Friends 慶祝動態
+        sticker = StickerSendMessage(package_id="11537", sticker_id="52002740")
+        line_bot_api.reply_message(event.reply_token, [sticker, flex_msg])
+    elif text == "趨勢比較":
+        msg = build_trend_flex()
+        if msg:
+            line_bot_api.reply_message(event.reply_token, msg)
+        else:
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 尚無今日資料，請等待今日速報更新後再查詢"))
+    elif text == "群組ID":
         source = event.source
         gid = getattr(source, "group_id", None) or getattr(source, "room_id", None) or source.user_id
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"ID：{gid}"))

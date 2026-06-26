@@ -195,6 +195,11 @@ def update_performance(monthly, today):
                     break
 
     if today:
+        # 更新前保留昨日資料
+        if data.get("today"):
+            data["yesterday"] = data["today"]
+        if data.get("today_departments"):
+            data["yesterday_departments"] = data["today_departments"]
         if "today" not in data:
             data["today"] = {}
         if "today_departments" not in data:
