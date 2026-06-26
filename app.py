@@ -18,11 +18,13 @@ CHANNEL_SECRET = os.environ.get(
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
-# 各地區業績報表圖片固定網址（後續可替換更新）
+# GitHub raw 固定網址 — 只需替換 images/ 資料夾內同名檔案即可更新圖片
+GITHUB_RAW_BASE = "https://raw.githubusercontent.com/c5268326/line-bot-test/main/images"
+
 REGION_IMAGES = {
-    "北一": "https://i.imgur.com/tdvjX6c.png",
-    "北二": "https://i.imgur.com/tdvjX6c.png",
-    "中區": "https://i.imgur.com/tdvjX6c.png",
+    "北一": f"{GITHUB_RAW_BASE}/bei1.png",
+    "北二": f"{GITHUB_RAW_BASE}/bei2.png",
+    "中區": f"{GITHUB_RAW_BASE}/central.png",
 }
 
 HELP_TEXT = "請輸入地區關鍵字查看業績報表：\n・北一\n・北二\n・中區"
