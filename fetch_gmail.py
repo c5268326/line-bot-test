@@ -124,13 +124,57 @@ def parse_excel(file_bytes):
     return results
 
 
-def update_performance(region_data):
+def parse_sheet(ws_or_rows, is_xlrd=False):
+    """通用解析：7欄格式 A=地區 B=實收 C=實收達成率 D=A&H E=A&H達成率 F=RP G=RP達成率"""
+    results = {}
+    rows = ws_or_rows if is_xlrd else list(ws_or_rows)
+    for row in rows:
+        vals = row if is_xlrd else list(row)
+        region = str(vals[0]).strip() if vals[0] else ""
+        if region not in REGIONS:
+            continue
+        def v(i): return str(vals[i]) if len(vals) > i and vals[i] not in (None, "") else "－"
+        results[region] = {
+            "實收保費": v(1), "實收達成率": v(2),
+            "A&H保費": v(3), "A&H達成率": v(4),
+            "RP保費": v(5), "RP達成率": v(6),
+        }
+    return results
+
+
+def parse_xls(file_bytes):
+    wb = xlrd.open_workbook(file_contents=file_bytes.read())
+    monthly = parse_sheet([wb.sheet_by_index(0).row_values(i) for i in range(1, wb.sheet_by_index(0).nrows)], is_xlrd=True)
+    today = {}
+    if wb.nsheets >= 2:
+        ws2 = wb.sheet_by_index(1)
+        today = parse_sheet([ws2.row_values(i) for i in range(1, ws2.nrows)], is_xlrd=True)
+    return monthly, today
+
+
+def parse_excel(file_bytes):
+    wb = openpyxl.load_workbook(file_bytes, data_only=True)
+    monthly = parse_sheet(wb.worksheets[0].iter_rows(min_row=2, values_only=True))
+    today = {}
+    if len(wb.worksheets) >= 2:
+        today = parse_sheet(wb.worksheets[1].iter_rows(min_row=2, values_only=True))
+    return monthly, today
+
+
+def update_performance(monthly, today):
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    for region, values in region_data.items():
+    for region, values in monthly.items():
         data["regions"][region] = values
-        print(f"✅ 更新 {region}")
+        print(f"✅ 本月更新 {region}")
+
+    if today:
+        if "today" not in data:
+            data["today"] = {}
+        for region, values in today.items():
+            data["today"][region] = values
+            print(f"✅ 今日更新 {region}")
 
     TW = timezone(timedelta(hours=8))
     data["updated_at"] = datetime.now(TW).strftime("%Y/%m/%d %H:%M")
@@ -149,11 +193,11 @@ def main():
     file_bytes, filename = get_latest_excel()
     if file_bytes:
         if filename.endswith(".xls"):
-            region_data = parse_xls(file_bytes)
+            monthly, today = parse_xls(file_bytes)
         else:
-            region_data = parse_excel(file_bytes)
-        if region_data:
-            update_performance(region_data)
+            monthly, today = parse_excel(file_bytes)
+        if monthly:
+            update_performance(monthly, today)
         else:
             print("⚠️ Excel 內找不到對應地區資料，請確認欄位格式")
     else:

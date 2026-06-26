@@ -37,7 +37,10 @@ HELP_TEXT = (
     "可用指令：\n"
     "・台北一區 / 桃竹苗區 / 中部地區 / 南部地區 / 台北二區 → 業績報表圖片\n"
     "・最新業績 → 查詢各地區業績數字\n"
-    "・最新業績圖 → 業績卡片總覽"
+    "・最新業績圖 → 業績卡片總覽\n"
+    "・達成率排名 → 三項達成率地區排名\n"
+    "・今日速報 → 今日新增保費速報\n"
+    "・本月速報 → 本月累積保費速報"
 )
 
 
@@ -137,6 +140,76 @@ def build_region_row(region, values):
     return {"type": "box", "layout": "vertical", "contents": contents}
 
 
+RANK_EMOJI = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
+
+REGION_SHORT = {
+    "全國": "全國",
+    "台北一區": "北一",
+    "台北二區": "北二",
+    "桃竹苗區": "桃竹苗",
+    "中部地區": "中區",
+    "南部地區": "南區",
+}
+
+
+def to_yi(val):
+    """數字轉億（保留兩位小數）"""
+    try:
+        n = float(str(val).replace(",", ""))
+        return f"{n / 1e8:.2f}億"
+    except (ValueError, TypeError):
+        return val
+
+
+def build_ranking_text():
+    data = load_performance()
+    regions = {r: v for r, v in data["regions"].items() if r != "全國"}
+    updated = data.get("updated_at", "－")
+
+    def rank_section(title, key):
+        scored = []
+        for r, v in regions.items():
+            f = parse_rate_float(v.get(key, "0"))
+            if f is not None:
+                scored.append((r, f))
+        scored.sort(key=lambda x: x[1], reverse=True)
+        lines = [f"🔥 {title}（全國 {fmt_rate(data['regions'].get('全國', {}).get(key, '0'))}）"]
+        for i, (r, f) in enumerate(scored):
+            emoji = RANK_EMOJI[i] if i < len(RANK_EMOJI) else f"{i+1}."
+            lines.append(f"{emoji} {REGION_SHORT.get(r, r)}　{fmt_rate(f)}")
+        return "\n".join(lines)
+
+    sections = [
+        f"📊 達成率排名\n截至 {updated}",
+        rank_section("A&H達成率", "A&H達成率"),
+        rank_section("RP達成率", "RP達成率"),
+        rank_section("實收達成率", "實收達成率"),
+    ]
+    return "\n\n".join(sections)
+
+
+def build_speed_report(source_key, label):
+    data = load_performance()
+    source = data.get(source_key, data.get("regions", {}))
+    national = source.get("全國", {})
+    updated = data.get("updated_at", "－")
+
+    ah = to_yi(national.get("A&H保費", "0"))
+    rp = to_yi(national.get("RP保費", "0"))
+    total = to_yi(national.get("實收保費", "0"))
+    ah_rate = fmt_rate(national.get("A&H達成率", "0"))
+    rp_rate = fmt_rate(national.get("RP達成率", "0"))
+    total_rate = fmt_rate(national.get("實收達成率", "0"))
+
+    return (
+        f"📊 {label}\n截至 {updated}\n\n"
+        f"🌐 全國\n"
+        f"A&H　{ah}　({ah_rate})\n"
+        f"RP　　{rp}　({rp_rate})\n"
+        f"實收　{total}　({total_rate})"
+    )
+
+
 def build_flex_message():
     data = load_performance()
     TW = timezone(timedelta(hours=8))
@@ -220,7 +293,22 @@ def webhook():
 def handle_message(event):
     text = event.message.text.strip()
 
-    if text == "最新業績圖":
+    if text == "達成率排名":
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=build_ranking_text())
+        )
+    elif text == "今日速報":
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=build_speed_report("today", "今日速報"))
+        )
+    elif text == "本月速報":
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=build_speed_report("regions", "本月累積速報"))
+        )
+    elif text == "最新業績圖":
         line_bot_api.reply_message(
             event.reply_token,
             build_flex_message()
