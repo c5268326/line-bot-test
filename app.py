@@ -76,6 +76,42 @@ def fmt_rate(val):
         return s
 
 
+def parse_rate_float(val):
+    """達成率字串轉 float（0~1），失敗回傳 None"""
+    s = str(val).strip().replace("%", "")
+    try:
+        n = float(s)
+        return n / 100 if n > 1.5 else n
+    except ValueError:
+        return None
+
+
+def progress_bar(rate_float):
+    """產生進度條區塊，rate_float 為 0.0~1.0+"""
+    pct = max(0.0, min(rate_float, 1.5))  # 上限 150%
+    filled = int(pct * 100)
+    empty = 100 - filled
+
+    if rate_float >= 1.0:
+        color = "#27ae60"   # 綠：達標
+    elif rate_float >= 0.8:
+        color = "#f39c12"   # 橘：接近
+    else:
+        color = "#e74c3c"   # 紅：未達
+
+    bar_contents = [{"type": "box", "layout": "vertical", "contents": [], "backgroundColor": color, "flex": filled, "height": "8px", "cornerRadius": "4px"}]
+    if empty > 0:
+        bar_contents.append({"type": "box", "layout": "vertical", "contents": [], "backgroundColor": "#e0e0e0", "flex": empty, "height": "8px", "cornerRadius": "4px"})
+
+    return {
+        "type": "box",
+        "layout": "horizontal",
+        "contents": bar_contents,
+        "margin": "xs",
+        "spacing": "xs",
+    }
+
+
 def build_region_row(region, values):
     """產生單一地區的 Flex 區塊"""
     def row(label, val):
@@ -89,25 +125,29 @@ def build_region_row(region, values):
             "margin": "xs",
         }
 
-    return {
-        "type": "box",
-        "layout": "vertical",
-        "contents": [
-            {
-                "type": "text",
-                "text": f"【{region}】",
-                "weight": "bold",
-                "size": "md",
-                "color": "#1a5276",
-                "margin": "md",
-            },
-            row("實收保費", fmt_amount(values["實收保費"])),
-            row("實收達成率", fmt_rate(values["實收達成率"])),
-            row("加權保費", fmt_amount(values["加權保費"])),
-            row("加權達成率", fmt_rate(values["加權保費達成率"])),
-            {"type": "separator", "margin": "md"},
-        ],
-    }
+    收達成率_str = fmt_rate(values["實收達成率"])
+    加權達成率_str = fmt_rate(values["加權保費達成率"])
+    收達成率_f = parse_rate_float(values["實收達成率"])
+    加權達成率_f = parse_rate_float(values["加權保費達成率"])
+
+    contents = [
+        {"type": "text", "text": f"【{region}】", "weight": "bold", "size": "md", "color": "#1a5276", "margin": "md"},
+        row("實收保費", fmt_amount(values["實收保費"])),
+        row("實收達成率", 收達成率_str),
+    ]
+    if 收達成率_f is not None:
+        contents.append(progress_bar(收達成率_f))
+
+    contents += [
+        row("加權保費", fmt_amount(values["加權保費"])),
+        row("加權達成率", 加權達成率_str),
+    ]
+    if 加權達成率_f is not None:
+        contents.append(progress_bar(加權達成率_f))
+
+    contents.append({"type": "separator", "margin": "md"})
+
+    return {"type": "box", "layout": "vertical", "contents": contents}
 
 
 def build_flex_message():
