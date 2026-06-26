@@ -86,18 +86,20 @@ def parse_rate_float(val):
         return None
 
 
-def progress_bar(rate_float):
+def progress_bar(rate_float, national_rate=None):
     """產生進度條區塊，rate_float 為 0.0~1.0+"""
     pct = max(0.0, min(rate_float, 1.5))  # 上限 150%
     filled = int(pct * 100)
     empty = 100 - filled
 
-    if rate_float >= 1.0:
-        color = "#27ae60"   # 綠：達標
+    if national_rate is not None:
+        color = "#e74c3c" if rate_float < national_rate else "#27ae60"
+    elif rate_float >= 1.0:
+        color = "#27ae60"
     elif rate_float >= 0.8:
-        color = "#f39c12"   # 橘：接近
+        color = "#f39c12"
     else:
-        color = "#e74c3c"   # 紅：未達
+        color = "#e74c3c"
 
     bar_contents = [{"type": "box", "layout": "vertical", "contents": [], "backgroundColor": color, "flex": filled, "height": "8px", "cornerRadius": "4px"}]
     if empty > 0:
@@ -112,7 +114,7 @@ def progress_bar(rate_float):
     }
 
 
-def build_region_row(region, values):
+def build_region_row(region, values, national_收=None, national_加=None):
     """產生單一地區的 Flex 區塊"""
     def row(label, val):
         return {
@@ -125,25 +127,31 @@ def build_region_row(region, values):
             "margin": "xs",
         }
 
-    收達成率_str = fmt_rate(values["實收達成率"])
-    加權達成率_str = fmt_rate(values["加權保費達成率"])
     收達成率_f = parse_rate_float(values["實收達成率"])
     加權達成率_f = parse_rate_float(values["加權保費達成率"])
+
+    # 全國本身不與自己比，用固定閾值
+    if region == "全國":
+        bar_收_national = None
+        bar_加_national = None
+    else:
+        bar_收_national = national_收
+        bar_加_national = national_加
 
     contents = [
         {"type": "text", "text": f"【{region}】", "weight": "bold", "size": "md", "color": "#1a5276", "margin": "md"},
         row("實收保費", fmt_amount(values["實收保費"])),
-        row("實收達成率", 收達成率_str),
+        row("實收達成率", fmt_rate(values["實收達成率"])),
     ]
     if 收達成率_f is not None:
-        contents.append(progress_bar(收達成率_f))
+        contents.append(progress_bar(收達成率_f, bar_收_national))
 
     contents += [
         row("加權保費", fmt_amount(values["加權保費"])),
-        row("加權達成率", 加權達成率_str),
+        row("加權達成率", fmt_rate(values["加權保費達成率"])),
     ]
     if 加權達成率_f is not None:
-        contents.append(progress_bar(加權達成率_f))
+        contents.append(progress_bar(加權達成率_f, bar_加_national))
 
     contents.append({"type": "separator", "margin": "md"})
 
@@ -155,7 +163,11 @@ def build_flex_message():
     TW = timezone(timedelta(hours=8))
     updated = data.get("updated_at", "－")
 
-    region_blocks = [build_region_row(r, v) for r, v in data["regions"].items()]
+    national = data["regions"].get("全國", {})
+    national_收 = parse_rate_float(national.get("實收達成率"))
+    national_加 = parse_rate_float(national.get("加權保費達成率"))
+
+    region_blocks = [build_region_row(r, v, national_收, national_加) for r, v in data["regions"].items()]
 
     bubble = {
         "type": "bubble",
