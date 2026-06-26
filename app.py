@@ -94,12 +94,8 @@ def progress_bar(rate_float, national_rate=None):
 
     if national_rate is not None:
         color = "#e74c3c" if rate_float < national_rate else "#27ae60"
-    elif rate_float >= 1.0:
-        color = "#27ae60"
-    elif rate_float >= 0.8:
-        color = "#f39c12"
     else:
-        color = "#e74c3c"
+        color = "#333333"
 
     bar_contents = [{"type": "box", "layout": "vertical", "contents": [], "backgroundColor": color, "flex": filled, "height": "8px", "cornerRadius": "4px"}]
     if empty > 0:
