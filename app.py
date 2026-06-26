@@ -138,18 +138,10 @@ def build_region_row(region, values, national_收=None, national_加=None):
         {"type": "text", "text": f"【{region}】", "weight": "bold", "size": "md", "color": "#1a5276", "margin": "md"},
         row("實收保費", fmt_amount(values["實收保費"])),
         row("實收達成率", fmt_rate(values["實收達成率"])),
-    ]
-    if 收達成率_f is not None:
-        contents.append(progress_bar(收達成率_f, bar_收_national))
-
-    contents += [
         row("加權保費", fmt_amount(values["加權保費"])),
         row("加權達成率", fmt_rate(values["加權保費達成率"])),
+        {"type": "separator", "margin": "md"},
     ]
-    if 加權達成率_f is not None:
-        contents.append(progress_bar(加權達成率_f, bar_加_national))
-
-    contents.append({"type": "separator", "margin": "md"})
 
     return {"type": "box", "layout": "vertical", "contents": contents}
 
@@ -172,7 +164,7 @@ def build_flex_message():
             "type": "box",
             "layout": "vertical",
             "contents": [
-                {"type": "text", "text": "📊 最新業績總覽", "weight": "bold", "size": "lg", "color": "#ffffff"},
+                {"type": "text", "text": "📊 今日最新業績速報", "weight": "bold", "size": "lg", "color": "#ffffff"},
                 {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#dddddd", "margin": "xs"},
             ],
             "backgroundColor": "#1a5276",
