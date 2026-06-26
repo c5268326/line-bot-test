@@ -4,8 +4,7 @@ from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage
 import os
 import json
-from datetime import datetime
-from zoneinfo import ZoneInfo
+from datetime import datetime, timezone, timedelta
 
 app = Flask(__name__)
 
@@ -47,7 +46,8 @@ def load_performance():
 
 def build_performance_text():
     data = load_performance()
-    now = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y/%m/%d %H:%M")
+    TW = timezone(timedelta(hours=8))
+    now = datetime.now(TW).strftime("%Y/%m/%d %H:%M")
     lines = [f"📊 最新業績\n截至 {now}\n"]
     for region, values in data["regions"].items():
         lines.append(
