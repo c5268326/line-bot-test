@@ -65,6 +65,17 @@ def index():
     return "LINE Bot is running."
 
 
+@app.route("/update", methods=["GET"])
+def update():
+    """手動觸發抓取最新 Excel 更新業績資料"""
+    try:
+        from fetch_gmail import main as fetch_main
+        fetch_main()
+        return "✅ 業績資料已更新", 200
+    except Exception as e:
+        return f"❌ 更新失敗：{str(e)}", 500
+
+
 @app.route("/webhook", methods=["POST"])
 def webhook():
     signature = request.headers.get("X-Line-Signature", "")
