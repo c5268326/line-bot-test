@@ -186,6 +186,7 @@ def build_ranking_flex():
                 "margin": "md",
             }
         ]
+        national_f = parse_rate_float(data["regions"].get("全國", {}).get(key, "0"))
         for i, (r, f) in enumerate(scored):
             emoji = RANK_EMOJI[i] if i < len(RANK_EMOJI) else f"{i+1}."
             short = REGION_SHORT.get(r, r)
@@ -199,6 +200,7 @@ def build_ranking_flex():
                 ],
                 "margin": "xs",
             })
+            rows.append(progress_bar(f, national_rate=national_f))
         rows.append({"type": "separator", "margin": "md"})
         return rows
 
