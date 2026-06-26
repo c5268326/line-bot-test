@@ -23,19 +23,35 @@ handler = WebhookHandler(CHANNEL_SECRET)
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com/c5268326/line-bot-test/main/images"
 
 REGION_IMAGES = {
-    "全國":    f"{GITHUB_RAW_BASE}/national.png",
-    "台北一區": f"{GITHUB_RAW_BASE}/taipei1.png",
-    "台北二區": f"{GITHUB_RAW_BASE}/taipei2.png",
-    "桃竹苗區": f"{GITHUB_RAW_BASE}/taoyuan.png",
-    "中部地區": f"{GITHUB_RAW_BASE}/central.png",
-    "南部地區": f"{GITHUB_RAW_BASE}/south.png",
+    "全國": f"{GITHUB_RAW_BASE}/national.png",
+}
+
+DEPARTMENT_MANAGERS = {
+    "北一業展一處": "蔡信宏", "北一業展二處": "陳俊廷", "北一業展三處": "許哲維",
+    "北一業展四處": "黃琮暉", "北一業展五處": "黃啟源", "北一業展六處": "阮玉蘭", "北一業展七處": "林正佳",
+    "北二業展一處": "李易修", "北二業展二處": "謝至偉", "北二業展三處": "陳勝隆",
+    "北二業展四處": "張雪熙", "北二業展五處": "黃怡叡", "北二業展六處": "徐嘉龍", "北二業展七處": "林慶文",
+    "桃竹苗業展一處": "陳來樹", "桃竹苗業展二處": "李嘉慶", "桃竹苗業展三處": "吳玉真", "桃竹苗業展四處": "黃柱珍",
+    "中區業展一處": "雷承恩", "中區業展二處": "蔡博清", "中區業展三處": "馮祖浩",
+    "中區業展四處": "李應良", "中區業展五處": "林建孜", "中區業展六處": "賴俊男", "中區業展七處": "廖俊傑",
+    "南區業展一處": "楊緒民", "南區業展二處": "邱淑珍", "南區業展三處": "王婉蕙", "南區業展四處": "鄭裕昌",
+}
+
+REGION_DEPARTMENTS = {
+    "台北一區": ["北一業展一處", "北一業展二處", "北一業展三處", "北一業展四處", "北一業展五處", "北一業展六處", "北一業展七處"],
+    "台北二區": ["北二業展一處", "北二業展二處", "北二業展三處", "北二業展四處", "北二業展五處", "北二業展六處", "北二業展七處"],
+    "桃竹苗區": ["桃竹苗業展一處", "桃竹苗業展二處", "桃竹苗業展三處", "桃竹苗業展四處"],
+    "中部地區": ["中區業展一處", "中區業展二處", "中區業展三處", "中區業展四處", "中區業展五處", "中區業展六處", "中區業展七處"],
+    "南部地區": ["南區業展一處", "南區業展二處", "南區業展三處", "南區業展四處"],
 }
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "data", "performance.json")
 
 HELP_TEXT = (
     "可用指令：\n"
-    "・台北一區 / 桃竹苗區 / 中部地區 / 南部地區 / 台北二區 → 業績報表圖片\n"
+    "・台北一區 / 桃竹苗區 / 中部地區 / 南部地區 / 台北二區\n"
+    "　→ 地區+業展處業績卡片\n"
+    "・全國 → 全國報表圖片\n"
     "・最新業績 → 查詢各地區業績數字\n"
     "・最新業績圖 → 業績卡片總覽\n"
     "・本月達成率排名 → 本月三項達成率地區排名\n"
@@ -114,8 +130,8 @@ def progress_bar(rate_float, national_rate=None):
     }
 
 
-def build_region_row(region, values, national=None):
-    """產生單一地區的 Flex 區塊，national 傳入全國數值用於達成率比較"""
+def build_region_row(region, values, national=None, subtitle=None):
+    """產生單一地區的 Flex 區塊，national 傳入全國數值用於達成率比較，subtitle 顯示主管姓名"""
     def rate_color(val, nat_key):
         if region == "全國" or national is None:
             return "#111111"
@@ -137,9 +153,12 @@ def build_region_row(region, values, national=None):
             "margin": "xs",
         }
 
-    contents = [
-        {"type": "text", "text": f"【{region}】", "weight": "bold", "size": "md", "color": "#1a5276", "margin": "md"},
-        row("實收", fmt_amount(values["實收保費"]), values["實收達成率"], "實收達成率"),
+    header = [{"type": "text", "text": f"【{region}】", "weight": "bold", "size": "md", "color": "#1a5276", "margin": "md"}]
+    if subtitle:
+        header.append({"type": "text", "text": subtitle, "size": "xs", "color": "#888888", "margin": "xs"})
+
+    contents = header + [
+        row("實收", fmt_amount(values.get("實收保費", "－")), values.get("實收達成率", "－"), "實收達成率"),
         row("A&H", fmt_amount(values.get("A&H保費", "－")), values.get("A&H達成率", "－"), "A&H達成率"),
         row("RP", fmt_amount(values.get("RP保費", "－")), values.get("RP達成率", "－"), "RP達成率"),
         {"type": "separator", "margin": "md"},
@@ -263,6 +282,58 @@ def build_speed_report(source_key, label):
     )
 
 
+def build_region_detail_flex(region):
+    data = load_performance()
+    dept_data = data.get("departments", {}).get(region, {})
+    national = data["regions"].get("全國", {})
+    region_vals = data["regions"].get(region, {})
+    updated = data.get("updated_at", "－")
+    dept_names = REGION_DEPARTMENTS.get(region, [])
+
+    def make_bubble(title, blocks):
+        return {
+            "type": "bubble",
+            "size": "mega",
+            "header": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {"type": "text", "text": title, "weight": "bold", "size": "lg", "color": "#ffffff"},
+                    {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#dddddd", "margin": "xs"},
+                ],
+                "backgroundColor": "#1a5276",
+                "paddingAll": "16px",
+            },
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": blocks,
+                "paddingAll": "12px",
+                "spacing": "none",
+            },
+        }
+
+    bubble1 = make_bubble(f"📊 {region} 業績總覽", [
+        build_region_row("全國", national),
+        build_region_row(region, region_vals, national=national),
+    ])
+
+    all_bubbles = [bubble1]
+    for i in range(0, len(dept_names), 4):
+        chunk = dept_names[i:i+4]
+        blocks = []
+        for dept in chunk:
+            manager = DEPARTMENT_MANAGERS.get(dept, "")
+            values = dept_data.get(dept, {})
+            blocks.append(build_region_row(dept, values, national=national, subtitle=manager))
+        suffix = f"（{i//4 + 1}）" if len(dept_names) > 4 else ""
+        all_bubbles.append(make_bubble(f"📊 {region} 業展處{suffix}", blocks))
+
+    if len(all_bubbles) == 1:
+        return FlexSendMessage(alt_text=f"{region}業績詳情", contents=all_bubbles[0])
+    return FlexSendMessage(alt_text=f"{region}業績詳情", contents={"type": "carousel", "contents": all_bubbles})
+
+
 def build_flex_from_source(source_regions, title, alt_text):
     data = load_performance()
     updated = data.get("updated_at", "－")
@@ -379,6 +450,11 @@ def handle_message(event):
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text=reply)
+        )
+    elif text in REGION_DEPARTMENTS:
+        line_bot_api.reply_message(
+            event.reply_token,
+            build_region_detail_flex(text)
         )
     elif text in REGION_IMAGES:
         url = REGION_IMAGES[text]

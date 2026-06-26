@@ -18,6 +18,16 @@ DATA_FILE = os.path.join(os.path.dirname(__file__), "data", "performance.json")
 
 REGIONS = ["全國", "台北一區", "台北二區", "桃竹苗區", "中部地區", "南部地區"]
 
+DEPARTMENTS = {
+    "台北一區": ["北一業展一處", "北一業展二處", "北一業展三處", "北一業展四處", "北一業展五處", "北一業展六處", "北一業展七處"],
+    "台北二區": ["北二業展一處", "北二業展二處", "北二業展三處", "北二業展四處", "北二業展五處", "北二業展六處", "北二業展七處"],
+    "桃竹苗區": ["桃竹苗業展一處", "桃竹苗業展二處", "桃竹苗業展三處", "桃竹苗業展四處"],
+    "中部地區": ["中區業展一處", "中區業展二處", "中區業展三處", "中區業展四處", "中區業展五處", "中區業展六處", "中區業展七處"],
+    "南部地區": ["南區業展一處", "南區業展二處", "南區業展三處", "南區業展四處"],
+}
+ALL_DEPTS = [d for depts in DEPARTMENTS.values() for d in depts]
+ALL_NAMES = set(REGIONS) | set(ALL_DEPTS)
+
 
 def get_latest_excel():
     """連線 Gmail IMAP，找最新一封含 xlsx 附件的信"""
@@ -125,16 +135,16 @@ def parse_excel(file_bytes):
 
 
 def parse_sheet(ws_or_rows, is_xlrd=False):
-    """通用解析：7欄格式 A=地區 B=實收 C=實收達成率 D=A&H E=A&H達成率 F=RP G=RP達成率"""
+    """通用解析：7欄格式 A=地區/業展處 B=實收 C=實收達成率 D=A&H E=A&H達成率 F=RP G=RP達成率"""
     results = {}
     rows = ws_or_rows if is_xlrd else list(ws_or_rows)
     for row in rows:
         vals = row if is_xlrd else list(row)
-        region = str(vals[0]).strip() if vals[0] else ""
-        if region not in REGIONS:
+        name = str(vals[0]).strip() if vals[0] else ""
+        if name not in ALL_NAMES:
             continue
         def v(i): return str(vals[i]) if len(vals) > i and vals[i] not in (None, "") else "－"
-        results[region] = {
+        results[name] = {
             "實收保費": v(1), "實收達成率": v(2),
             "A&H保費": v(3), "A&H達成率": v(4),
             "RP保費": v(5), "RP達成率": v(6),
@@ -165,16 +175,35 @@ def update_performance(monthly, today):
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    for region, values in monthly.items():
-        data["regions"][region] = values
-        print(f"✅ 本月更新 {region}")
+    if "departments" not in data:
+        data["departments"] = {r: {} for r in DEPARTMENTS}
+
+    for name, values in monthly.items():
+        if name in REGIONS:
+            data["regions"][name] = values
+            print(f"✅ 本月更新 {name}")
+        else:
+            for region, depts in DEPARTMENTS.items():
+                if name in depts:
+                    data["departments"].setdefault(region, {})[name] = values
+                    print(f"✅ 本月更新 {name}")
+                    break
 
     if today:
         if "today" not in data:
             data["today"] = {}
-        for region, values in today.items():
-            data["today"][region] = values
-            print(f"✅ 今日更新 {region}")
+        if "today_departments" not in data:
+            data["today_departments"] = {r: {} for r in DEPARTMENTS}
+        for name, values in today.items():
+            if name in REGIONS:
+                data["today"][name] = values
+                print(f"✅ 今日更新 {name}")
+            else:
+                for region, depts in DEPARTMENTS.items():
+                    if name in depts:
+                        data["today_departments"].setdefault(region, {})[name] = values
+                        print(f"✅ 今日更新 {name}")
+                        break
 
     TW = timezone(timedelta(hours=8))
     data["updated_at"] = datetime.now(TW).strftime("%Y/%m/%d %H:%M")
