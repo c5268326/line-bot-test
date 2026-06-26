@@ -23,6 +23,7 @@ handler = WebhookHandler(CHANNEL_SECRET)
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com/c5268326/line-bot-test/main/images"
 
 REGION_IMAGES = {
+    "全國": f"{GITHUB_RAW_BASE}/national.png",
     "北一": f"{GITHUB_RAW_BASE}/bei1.png",
     "北二": f"{GITHUB_RAW_BASE}/bei2.png",
     "中區": f"{GITHUB_RAW_BASE}/central.png",
@@ -32,7 +33,7 @@ DATA_FILE = os.path.join(os.path.dirname(__file__), "data", "performance.json")
 
 HELP_TEXT = (
     "可用指令：\n"
-    "・北一 / 北二 / 中區 → 業績報表圖片\n"
+    "・全國 / 北一 / 北二 / 中區 → 業績報表圖片\n"
     "・最新業績 → 查詢各地區業績數字"
 )
 
