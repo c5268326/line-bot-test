@@ -84,8 +84,10 @@ def parse_xls(file_bytes):
             results[region] = {
                 "實收保費": str(row[1]) if row[1] != "" else "－",
                 "實收達成率": str(row[2]) if row[2] != "" else "－",
-                "加權保費": str(row[3]) if row[3] != "" else "－",
-                "加權保費達成率": str(row[4]) if row[4] != "" else "－",
+                "A&H保費": str(row[3]) if len(row) > 3 and row[3] != "" else "－",
+                "A&H達成率": str(row[4]) if len(row) > 4 and row[4] != "" else "－",
+                "RP保費": str(row[5]) if len(row) > 5 and row[5] != "" else "－",
+                "RP達成率": str(row[6]) if len(row) > 6 and row[6] != "" else "－",
             }
     return results
 
@@ -93,13 +95,14 @@ def parse_xls(file_bytes):
 def parse_excel(file_bytes):
     """
     解析 Excel 取得各地區業績數據
-    ⚠️ 請根據實際 Excel 欄位調整（目前為範例格式）
-    假設格式：
+    格式：
       A欄 = 地區名稱
       B欄 = 實收保費
       C欄 = 實收達成率
-      D欄 = 加權保費
-      E欄 = 加權保費達成率
+      D欄 = A&H保費
+      E欄 = A&H達成率
+      F欄 = RP保費
+      G欄 = RP達成率
     """
     wb = openpyxl.load_workbook(file_bytes, data_only=True)
     ws = wb.active
@@ -113,8 +116,10 @@ def parse_excel(file_bytes):
             results[region] = {
                 "實收保費": str(row[1]) if row[1] is not None else "－",
                 "實收達成率": str(row[2]) if row[2] is not None else "－",
-                "加權保費": str(row[3]) if row[3] is not None else "－",
-                "加權保費達成率": str(row[4]) if row[4] is not None else "－",
+                "A&H保費": str(row[3]) if len(row) > 3 and row[3] is not None else "－",
+                "A&H達成率": str(row[4]) if len(row) > 4 and row[4] is not None else "－",
+                "RP保費": str(row[5]) if len(row) > 5 and row[5] is not None else "－",
+                "RP達成率": str(row[6]) if len(row) > 6 and row[6] is not None else "－",
             }
     return results
 

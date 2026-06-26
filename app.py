@@ -110,7 +110,7 @@ def progress_bar(rate_float, national_rate=None):
     }
 
 
-def build_region_row(region, values, national_收=None, national_加=None):
+def build_region_row(region, values):
     """產生單一地區的 Flex 區塊"""
     def row(label, val):
         return {
@@ -123,23 +123,14 @@ def build_region_row(region, values, national_收=None, national_加=None):
             "margin": "xs",
         }
 
-    收達成率_f = parse_rate_float(values["實收達成率"])
-    加權達成率_f = parse_rate_float(values["加權保費達成率"])
-
-    # 全國本身不與自己比，用固定閾值
-    if region == "全國":
-        bar_收_national = None
-        bar_加_national = None
-    else:
-        bar_收_national = national_收
-        bar_加_national = national_加
-
     contents = [
         {"type": "text", "text": f"【{region}】", "weight": "bold", "size": "md", "color": "#1a5276", "margin": "md"},
         row("實收保費", fmt_amount(values["實收保費"])),
         row("實收達成率", fmt_rate(values["實收達成率"])),
-        row("加權保費", fmt_amount(values["加權保費"])),
-        row("加權達成率", fmt_rate(values["加權保費達成率"])),
+        row("A&H保費", fmt_amount(values.get("A&H保費", "－"))),
+        row("A&H達成率", fmt_rate(values.get("A&H達成率", "－"))),
+        row("RP保費", fmt_amount(values.get("RP保費", "－"))),
+        row("RP達成率", fmt_rate(values.get("RP達成率", "－"))),
         {"type": "separator", "margin": "md"},
     ]
 
@@ -151,11 +142,7 @@ def build_flex_message():
     TW = timezone(timedelta(hours=8))
     updated = data.get("updated_at", "－")
 
-    national = data["regions"].get("全國", {})
-    national_收 = parse_rate_float(national.get("實收達成率"))
-    national_加 = parse_rate_float(national.get("加權保費達成率"))
-
-    region_blocks = [build_region_row(r, v, national_收, national_加) for r, v in data["regions"].items()]
+    region_blocks = [build_region_row(r, v) for r, v in data["regions"].items()]
 
     bubble = {
         "type": "bubble",
@@ -192,8 +179,10 @@ def build_performance_text():
             f"【{region}】\n"
             f"實收保費：{fmt_amount(values['實收保費'])}\n"
             f"實收達成率：{fmt_rate(values['實收達成率'])}\n"
-            f"加權保費：{fmt_amount(values['加權保費'])}\n"
-            f"加權保費達成率：{fmt_rate(values['加權保費達成率'])}"
+            f"A&H保費：{fmt_amount(values.get('A&H保費', '－'))}\n"
+            f"A&H達成率：{fmt_rate(values.get('A&H達成率', '－'))}\n"
+            f"RP保費：{fmt_amount(values.get('RP保費', '－'))}\n"
+            f"RP達成率：{fmt_rate(values.get('RP達成率', '－'))}"
         )
     return "\n\n".join(lines)
 
