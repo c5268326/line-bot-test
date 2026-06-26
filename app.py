@@ -3,6 +3,8 @@ from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage
 import os
+import json
+from datetime import datetime
 
 app = Flask(__name__)
 
@@ -18,7 +20,6 @@ CHANNEL_SECRET = os.environ.get(
 line_bot_api = LineBotApi(CHANNEL_ACCESS_TOKEN)
 handler = WebhookHandler(CHANNEL_SECRET)
 
-# GitHub raw 固定網址 — 只需替換 images/ 資料夾內同名檔案即可更新圖片
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com/c5268326/line-bot-test/main/images"
 
 REGION_IMAGES = {
@@ -27,7 +28,33 @@ REGION_IMAGES = {
     "中區": f"{GITHUB_RAW_BASE}/central.png",
 }
 
-HELP_TEXT = "請輸入地區關鍵字查看業績報表：\n・北一\n・北二\n・中區"
+DATA_FILE = os.path.join(os.path.dirname(__file__), "data", "performance.json")
+
+HELP_TEXT = (
+    "可用指令：\n"
+    "・北一 / 北二 / 中區 → 業績報表圖片\n"
+    "・最新業績 → 查詢各地區業績數字"
+)
+
+
+def load_performance():
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def build_performance_text():
+    data = load_performance()
+    now = datetime.now().strftime("%Y/%m/%d %H:%M")
+    lines = [f"📊 最新業績\n截至 {now}\n"]
+    for region, values in data["regions"].items():
+        lines.append(
+            f"【{region}】\n"
+            f"實收保費：{values['實收保費']}\n"
+            f"實收達成率：{values['實收達成率']}\n"
+            f"加權保費：{values['加權保費']}\n"
+            f"加權保費達成率：{values['加權保費達成率']}"
+        )
+    return "\n\n".join(lines)
 
 
 @app.route("/", methods=["GET"])
@@ -52,7 +79,13 @@ def webhook():
 def handle_message(event):
     text = event.message.text.strip()
 
-    if text in REGION_IMAGES:
+    if text == "最新業績":
+        reply = build_performance_text()
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text=reply)
+        )
+    elif text in REGION_IMAGES:
         url = REGION_IMAGES[text]
         line_bot_api.reply_message(
             event.reply_token,
