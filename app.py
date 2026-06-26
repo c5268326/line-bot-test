@@ -130,8 +130,37 @@ def progress_bar(rate_float, national_rate=None):
     }
 
 
-def build_region_row(region, values, national=None, subtitle=None):
-    """產生單一地區的 Flex 區塊，national 傳入全國數值用於達成率比較，subtitle 顯示主管姓名"""
+def make_bubble_header(title, updated):
+    return {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+            {"type": "text", "text": title, "weight": "bold", "size": "lg", "color": "#1a5276"},
+            {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#888888", "margin": "xs"},
+        ],
+        "backgroundColor": "#EBF5FB",
+        "paddingAll": "16px",
+    }
+
+
+def calc_dept_rankings(data):
+    """計算各業展處三項達成率的全國排名，回傳 {dept: {key: rank}}"""
+    all_depts = {}
+    for region_depts in data.get("departments", {}).values():
+        for dept, vals in region_depts.items():
+            all_depts[dept] = vals
+    rankings = {}
+    for key in ("實收達成率", "A&H達成率", "RP達成率"):
+        scored = [(d, parse_rate_float(v.get(key, "0"))) for d, v in all_depts.items()]
+        scored = [(d, f) for d, f in scored if f is not None]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        for rank, (dept, _) in enumerate(scored, 1):
+            rankings.setdefault(dept, {})[key] = rank
+    return rankings
+
+
+def build_region_row(region, values, national=None, subtitle=None, rankings=None):
+    """產生單一地區的 Flex 區塊。rankings 傳入時在達成率後顯示全國排名。"""
     def rate_color(val, nat_key):
         if region == "全國" or national is None:
             return "#111111"
@@ -142,13 +171,17 @@ def build_region_row(region, values, national=None, subtitle=None):
         return "#111111"
 
     def row(label, amount, rate_val, nat_key):
+        rank_text = ""
+        if rankings:
+            r = rankings.get(nat_key)
+            if r: rank_text = f" #{r}"
         return {
             "type": "box",
             "layout": "horizontal",
             "contents": [
-                {"type": "text", "text": label, "size": "sm", "color": "#555555", "flex": 2},
-                {"type": "text", "text": amount, "size": "sm", "color": "#111111", "flex": 4, "align": "end", "weight": "bold"},
-                {"type": "text", "text": fmt_rate(rate_val), "size": "sm", "color": rate_color(rate_val, nat_key), "flex": 3, "align": "end", "weight": "bold"},
+                {"type": "text", "text": label, "size": "sm", "color": "#666666", "flex": 2},
+                {"type": "text", "text": amount, "size": "sm", "color": "#222222", "flex": 4, "align": "end", "weight": "bold"},
+                {"type": "text", "text": fmt_rate(rate_val) + rank_text, "size": "sm", "color": rate_color(rate_val, nat_key), "flex": 3, "align": "end", "weight": "bold"},
             ],
             "margin": "xs",
         }
@@ -209,7 +242,7 @@ def build_ranking_flex(source_key="regions", title="📊 本月達成率排名")
                 "type": "box",
                 "layout": "horizontal",
                 "contents": [
-                    {"type": "text", "text": f"🔥 {section_title}", "weight": "bold", "size": "sm", "color": "#1a5276", "flex": 5},
+                    {"type": "text", "text": f"🔥 {section_title}", "weight": "bold", "size": "sm", "color": "#2471a3", "flex": 5},
                     {"type": "text", "text": f"全國 {national_rate}", "size": "sm", "color": "#555555", "flex": 3, "align": "end"},
                 ],
                 "margin": "md",
@@ -243,10 +276,10 @@ def build_ranking_flex(source_key="regions", title="📊 本月達成率排名")
             "type": "box",
             "layout": "vertical",
             "contents": [
-                {"type": "text", "text": title, "weight": "bold", "size": "lg", "color": "#ffffff"},
-                {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#dddddd", "margin": "xs"},
+                {"type": "text", "text": title, "weight": "bold", "size": "lg", "color": "#1a5276"},
+                {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#888888", "margin": "xs"},
             ],
-            "backgroundColor": "#1a5276",
+            "backgroundColor": "#EBF5FB",
             "paddingAll": "16px",
         },
         "body": {
@@ -294,16 +327,7 @@ def build_region_detail_flex(region):
         return {
             "type": "bubble",
             "size": "mega",
-            "header": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {"type": "text", "text": title, "weight": "bold", "size": "lg", "color": "#ffffff"},
-                    {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#dddddd", "margin": "xs"},
-                ],
-                "backgroundColor": "#1a5276",
-                "paddingAll": "16px",
-            },
+            "header": make_bubble_header(title, updated),
             "body": {
                 "type": "box",
                 "layout": "vertical",
@@ -312,6 +336,8 @@ def build_region_detail_flex(region):
                 "spacing": "none",
             },
         }
+
+    all_rankings = calc_dept_rankings(data)
 
     bubble1 = make_bubble(f"📊 {region} 業績總覽", [
         build_region_row("全國", national),
@@ -323,7 +349,7 @@ def build_region_detail_flex(region):
         manager = DEPARTMENT_MANAGERS.get(dept, "")
         values = dept_data.get(dept, {})
         label = f"{dept}　{manager}" if manager else dept
-        dept_blocks.append(build_region_row(label, values, national=national))
+        dept_blocks.append(build_region_row(label, values, national=national, rankings=all_rankings.get(dept)))
     bubble2 = make_bubble(f"📊 {region} 業展處", dept_blocks)
 
     return FlexSendMessage(alt_text=f"{region}業績詳情", contents={"type": "carousel", "contents": [bubble1, bubble2]})
@@ -337,16 +363,7 @@ def build_flex_from_source(source_regions, title, alt_text):
     bubble = {
         "type": "bubble",
         "size": "mega",
-        "header": {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {"type": "text", "text": title, "weight": "bold", "size": "lg", "color": "#ffffff"},
-                {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#dddddd", "margin": "xs"},
-            ],
-            "backgroundColor": "#1a5276",
-            "paddingAll": "16px",
-        },
+        "header": make_bubble_header(title, updated),
         "body": {
             "type": "box",
             "layout": "vertical",
