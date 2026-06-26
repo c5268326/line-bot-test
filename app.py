@@ -1,7 +1,7 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage
+from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage, FlexSendMessage
 import os
 import json
 from datetime import datetime, timezone, timedelta
@@ -36,7 +36,8 @@ DATA_FILE = os.path.join(os.path.dirname(__file__), "data", "performance.json")
 HELP_TEXT = (
     "可用指令：\n"
     "・台北一區 / 桃竹苗區 / 中部地區 / 南部地區 / 台北二區 → 業績報表圖片\n"
-    "・最新業績 → 查詢各地區業績數字"
+    "・最新業績 → 查詢各地區業績數字\n"
+    "・最新業績圖 → 業績卡片總覽"
 )
 
 
@@ -73,6 +74,72 @@ def fmt_rate(val):
         return f"{n:.1f}%"
     except ValueError:
         return s
+
+
+def build_region_row(region, values):
+    """產生單一地區的 Flex 區塊"""
+    def row(label, val):
+        return {
+            "type": "box",
+            "layout": "horizontal",
+            "contents": [
+                {"type": "text", "text": label, "size": "sm", "color": "#555555", "flex": 3},
+                {"type": "text", "text": val, "size": "sm", "color": "#111111", "flex": 4, "align": "end", "weight": "bold"},
+            ],
+            "margin": "xs",
+        }
+
+    return {
+        "type": "box",
+        "layout": "vertical",
+        "contents": [
+            {
+                "type": "text",
+                "text": f"【{region}】",
+                "weight": "bold",
+                "size": "md",
+                "color": "#1a5276",
+                "margin": "md",
+            },
+            row("實收保費", fmt_amount(values["實收保費"])),
+            row("實收達成率", fmt_rate(values["實收達成率"])),
+            row("加權保費", fmt_amount(values["加權保費"])),
+            row("加權達成率", fmt_rate(values["加權保費達成率"])),
+            {"type": "separator", "margin": "md"},
+        ],
+    }
+
+
+def build_flex_message():
+    data = load_performance()
+    TW = timezone(timedelta(hours=8))
+    updated = data.get("updated_at", "－")
+
+    region_blocks = [build_region_row(r, v) for r, v in data["regions"].items()]
+
+    bubble = {
+        "type": "bubble",
+        "size": "mega",
+        "header": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {"type": "text", "text": "📊 最新業績總覽", "weight": "bold", "size": "lg", "color": "#ffffff"},
+                {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#dddddd", "margin": "xs"},
+            ],
+            "backgroundColor": "#1a5276",
+            "paddingAll": "16px",
+        },
+        "body": {
+            "type": "box",
+            "layout": "vertical",
+            "contents": region_blocks,
+            "paddingAll": "12px",
+            "spacing": "none",
+        },
+    }
+
+    return FlexSendMessage(alt_text="最新業績總覽", contents=bubble)
 
 
 def build_performance_text():
@@ -124,7 +191,12 @@ def webhook():
 def handle_message(event):
     text = event.message.text.strip()
 
-    if text == "最新業績":
+    if text == "最新業績圖":
+        line_bot_api.reply_message(
+            event.reply_token,
+            build_flex_message()
+        )
+    elif text == "最新業績":
         reply = build_performance_text()
         line_bot_api.reply_message(
             event.reply_token,
