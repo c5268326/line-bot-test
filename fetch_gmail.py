@@ -24,28 +24,41 @@ def get_latest_excel():
     mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
     mail.select("inbox")
 
-    # 只搜尋指定寄件者的信
     SENDERS = [
         "Jessica-YC.Lu@nanshan.com.tw",
         "c5268326@gmail.com",
     ]
-    search_query = " ".join([f'FROM "{s}"' for s in SENDERS])
-    # IMAP OR 語法
+
+    # 先嘗試指定寄件者搜尋
     _, data = mail.search(None, f'(OR FROM "{SENDERS[0]}" FROM "{SENDERS[1]}")')
     mail_ids = data[0].split()
+    print(f"指定寄件者搜尋結果：{len(mail_ids)} 封")
+
+    # 若找不到，改搜尋全部信件
+    if not mail_ids:
+        print("改為搜尋全部信件...")
+        _, data = mail.search(None, "ALL")
+        mail_ids = data[0].split()
+        print(f"全部信件數量：{len(mail_ids)} 封")
 
     # 從最新往舊找，找到第一封含 xlsx 或 xls 的信
     for mail_id in reversed(mail_ids):
         _, msg_data = mail.fetch(mail_id, "(RFC822)")
         msg = email.message_from_bytes(msg_data[0][1])
+        sender = msg.get("From", "")
+        subject = msg.get("Subject", "")
 
+        has_attachment = False
         for part in msg.walk():
             filename = part.get_filename()
-            if filename and (filename.endswith(".xlsx") or filename.endswith(".xls")):
-                print(f"找到附件：{filename}")
-                file_bytes = part.get_payload(decode=True)
-                mail.logout()
-                return io.BytesIO(file_bytes), filename
+            if filename:
+                has_attachment = True
+                print(f"信件寄件者：{sender}，主旨：{subject}，附件：{filename}")
+                if filename.endswith(".xlsx") or filename.endswith(".xls"):
+                    print(f"找到目標附件：{filename}")
+                    file_bytes = part.get_payload(decode=True)
+                    mail.logout()
+                    return io.BytesIO(file_bytes), filename
 
     mail.logout()
     return None, None
