@@ -125,25 +125,23 @@ def build_region_row(region, values, national=None):
             return "#e74c3c"
         return "#111111"
 
-    def row(label, val, color="#111111"):
+    def row(label, amount, rate_val, nat_key):
         return {
             "type": "box",
             "layout": "horizontal",
             "contents": [
-                {"type": "text", "text": label, "size": "sm", "color": "#555555", "flex": 3},
-                {"type": "text", "text": val, "size": "sm", "color": color, "flex": 4, "align": "end", "weight": "bold"},
+                {"type": "text", "text": label, "size": "sm", "color": "#555555", "flex": 2},
+                {"type": "text", "text": amount, "size": "sm", "color": "#111111", "flex": 4, "align": "end", "weight": "bold"},
+                {"type": "text", "text": fmt_rate(rate_val), "size": "sm", "color": rate_color(rate_val, nat_key), "flex": 3, "align": "end", "weight": "bold"},
             ],
             "margin": "xs",
         }
 
     contents = [
         {"type": "text", "text": f"【{region}】", "weight": "bold", "size": "md", "color": "#1a5276", "margin": "md"},
-        row("實收保費", fmt_amount(values["實收保費"])),
-        row("實收達成率", fmt_rate(values["實收達成率"]), rate_color(values["實收達成率"], "實收達成率")),
-        row("A&H保費", fmt_amount(values.get("A&H保費", "－"))),
-        row("A&H達成率", fmt_rate(values.get("A&H達成率", "－")), rate_color(values.get("A&H達成率", "－"), "A&H達成率")),
-        row("RP保費", fmt_amount(values.get("RP保費", "－"))),
-        row("RP達成率", fmt_rate(values.get("RP達成率", "－")), rate_color(values.get("RP達成率", "－"), "RP達成率")),
+        row("實收", fmt_amount(values["實收保費"]), values["實收達成率"], "實收達成率"),
+        row("A&H", fmt_amount(values.get("A&H保費", "－")), values.get("A&H達成率", "－"), "A&H達成率"),
+        row("RP", fmt_amount(values.get("RP保費", "－")), values.get("RP達成率", "－"), "RP達成率"),
         {"type": "separator", "margin": "md"},
     ]
 
