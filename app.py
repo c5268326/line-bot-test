@@ -174,7 +174,8 @@ def build_region_row(region, values, national=None, subtitle=None, rankings=None
         rank_text = ""
         if rankings:
             r = rankings.get(nat_key)
-            if r: rank_text = f" #{r}"
+            CIRCLE_NUMS = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩","⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳","㉑","㉒","㉓","㉔","㉕","㉖","㉗","㉘","㉙","㉚"]
+            if r: rank_text = f" {CIRCLE_NUMS[r-1]}" if r <= len(CIRCLE_NUMS) else f" {r}"
         return {
             "type": "box",
             "layout": "horizontal",
