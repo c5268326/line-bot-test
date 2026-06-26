@@ -5,6 +5,7 @@ from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSend
 import os
 import json
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 app = Flask(__name__)
 
@@ -46,7 +47,7 @@ def load_performance():
 
 def build_performance_text():
     data = load_performance()
-    now = datetime.now().strftime("%Y/%m/%d %H:%M")
+    now = datetime.now(ZoneInfo("Asia/Taipei")).strftime("%Y/%m/%d %H:%M")
     lines = [f"📊 最新業績\n截至 {now}\n"]
     for region, values in data["regions"].items():
         lines.append(
