@@ -45,6 +45,36 @@ def load_performance():
         return json.load(f)
 
 
+def fmt_amount(val):
+    """數字加千分位，非數字原樣回傳"""
+    try:
+        n = float(str(val).replace(",", ""))
+        return f"{n:,.0f}"
+    except (ValueError, TypeError):
+        return val
+
+
+def fmt_rate(val):
+    """確保達成率顯示為百分比格式"""
+    s = str(val).strip()
+    if s in ("－", "", "None"):
+        return "－"
+    # 已含 % 直接回傳
+    if "%" in s:
+        try:
+            return f"{float(s.replace('%', '')):.1f}%"
+        except ValueError:
+            return s
+    # 小數格式（如 0.85 → 85.0%）
+    try:
+        n = float(s)
+        if n <= 1.5:
+            return f"{n * 100:.1f}%"
+        return f"{n:.1f}%"
+    except ValueError:
+        return s
+
+
 def build_performance_text():
     data = load_performance()
     TW = timezone(timedelta(hours=8))
@@ -53,10 +83,10 @@ def build_performance_text():
     for region, values in data["regions"].items():
         lines.append(
             f"【{region}】\n"
-            f"實收保費：{values['實收保費']}\n"
-            f"實收達成率：{values['實收達成率']}\n"
-            f"加權保費：{values['加權保費']}\n"
-            f"加權保費達成率：{values['加權保費達成率']}"
+            f"實收保費：{fmt_amount(values['實收保費'])}\n"
+            f"實收達成率：{fmt_rate(values['實收達成率'])}\n"
+            f"加權保費：{fmt_amount(values['加權保費'])}\n"
+            f"加權保費達成率：{fmt_rate(values['加權保費達成率'])}"
         )
     return "\n\n".join(lines)
 
