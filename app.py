@@ -24,10 +24,10 @@ GITHUB_RAW_BASE = "https://raw.githubusercontent.com/c5268326/line-bot-test/main
 
 REGION_IMAGES = {
     "台北一區": f"{GITHUB_RAW_BASE}/taipei1.png",
+    "台北二區": f"{GITHUB_RAW_BASE}/taipei2.png",
     "桃竹苗區": f"{GITHUB_RAW_BASE}/taoyuan.png",
     "中部地區": f"{GITHUB_RAW_BASE}/central.png",
     "南部地區": f"{GITHUB_RAW_BASE}/south.png",
-    "台北二區": f"{GITHUB_RAW_BASE}/taipei2.png",
 }
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "data", "performance.json")
