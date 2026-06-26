@@ -23,6 +23,7 @@ handler = WebhookHandler(CHANNEL_SECRET)
 GITHUB_RAW_BASE = "https://raw.githubusercontent.com/c5268326/line-bot-test/main/images"
 
 REGION_IMAGES = {
+    "全國":    f"{GITHUB_RAW_BASE}/national.png",
     "台北一區": f"{GITHUB_RAW_BASE}/taipei1.png",
     "台北二區": f"{GITHUB_RAW_BASE}/taipei2.png",
     "桃竹苗區": f"{GITHUB_RAW_BASE}/taoyuan.png",

@@ -14,7 +14,7 @@ GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
 
 DATA_FILE = os.path.join(os.path.dirname(__file__), "data", "performance.json")
 
-REGIONS = ["台北一區", "台北二區", "桃竹苗區", "中部地區", "南部地區"]
+REGIONS = ["全國", "台北一區", "台北二區", "桃竹苗區", "中部地區", "南部地區"]
 
 
 def get_latest_excel():
