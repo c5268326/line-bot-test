@@ -54,6 +54,7 @@ HELP_TEXT = (
     "・全國 → 全國報表圖片\n"
     "・最新業績 → 查詢各地區業績數字\n"
     "・最新業績圖 → 業績卡片總覽\n"
+    "・業展處總覽 → 所有業展處業績卡片（含全國排名）\n"
     "・本月達成率排名 → 本月三項達成率地區排名\n"
     "・今日達成率排名 → 今日三項達成率地區排名\n"
     "・今日速報 → 今日新增保費速報\n"
@@ -356,6 +357,37 @@ def build_region_detail_flex(region):
     return FlexSendMessage(alt_text=f"{region}業績詳情", contents={"type": "carousel", "contents": [bubble1, bubble2]})
 
 
+def build_all_depts_flex():
+    data = load_performance()
+    national = data["regions"].get("全國", {})
+    updated = data.get("updated_at", "－")
+    all_rankings = calc_dept_rankings(data)
+
+    bubbles = []
+    for region, dept_names in REGION_DEPARTMENTS.items():
+        dept_data = data.get("departments", {}).get(region, {})
+        blocks = []
+        for dept in dept_names:
+            manager = DEPARTMENT_MANAGERS.get(dept, "")
+            values = dept_data.get(dept, {})
+            label = f"{dept}　{manager}" if manager else dept
+            blocks.append(build_region_row(label, values, national=national, rankings=all_rankings.get(dept)))
+        bubbles.append({
+            "type": "bubble",
+            "size": "mega",
+            "header": make_bubble_header(f"📊 {region} 業展處", updated),
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": blocks,
+                "paddingAll": "12px",
+                "spacing": "none",
+            },
+        })
+
+    return FlexSendMessage(alt_text="業展處總覽", contents={"type": "carousel", "contents": bubbles})
+
+
 def build_flex_from_source(source_regions, title, alt_text):
     data = load_performance()
     updated = data.get("updated_at", "－")
@@ -432,7 +464,12 @@ def webhook():
 def handle_message(event):
     text = event.message.text.strip()
 
-    if text == "本月達成率排名":
+    if text == "業展處總覽":
+        line_bot_api.reply_message(
+            event.reply_token,
+            build_all_depts_flex()
+        )
+    elif text == "本月達成率排名":
         line_bot_api.reply_message(
             event.reply_token,
             build_ranking_flex("regions", "📊 本月達成率排名")
