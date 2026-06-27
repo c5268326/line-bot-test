@@ -60,8 +60,7 @@ HELP_TEXT = (
     "・本月業績速報 → 業績卡片總覽\n"
     "・本月業展處速報 → 所有業展處本月業績卡片（含全國排名）\n"
     "・本日業展處速報 → 所有業展處本日業績卡片（含全國排名）\n"
-    "・本月達成率排名 → 本月三項達成率地區排名\n"
-    "・今日達成率排名 → 今日三項達成率地區排名\n"
+    "・達成率排名 → 選擇本月或本日達成率地區排名\n"
     "・本日業績速報 → 本日新增保費速報\n"
     "・達標 → 業展處達標狀況 + 動態慶祝\n"
     "・趨勢比較 → 業展處今日 vs 昨日全國排名升降（▲▼）\n"
@@ -708,15 +707,24 @@ def handle_message(event):
             event.reply_token,
             build_all_depts_flex("today_departments", "本日", "本日業展處速報")
         )
+    elif text == "達成率排名":
+        items = [
+            QuickReplyButton(action=MessageAction(label="本月達成率排名", text="本月達成率排名")),
+            QuickReplyButton(action=MessageAction(label="本日達成率排名", text="本日達成率排名")),
+        ]
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="請選擇查詢期間 👇", quick_reply=QuickReply(items=items))
+        )
     elif text == "本月達成率排名":
         line_bot_api.reply_message(
             event.reply_token,
             build_ranking_flex("regions", "📊 本月達成率排名")
         )
-    elif text == "今日達成率排名":
+    elif text == "本日達成率排名":
         line_bot_api.reply_message(
             event.reply_token,
-            build_ranking_flex("today", "📊 今日達成率排名")
+            build_ranking_flex("today", "📊 本日達成率排名")
         )
     elif text == "本日業績速報":
         data = load_performance()
