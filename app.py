@@ -53,11 +53,11 @@ HELP_TEXT = (
     "　→ 地區+業展處業績卡片\n"
     "・全國 → 全國報表圖片\n"
     "・最新業績 → 查詢各地區業績數字\n"
-    "・最新業績圖 → 業績卡片總覽\n"
+    "・本月最新業績速報 → 業績卡片總覽\n"
     "・業展處總覽 → 所有業展處業績卡片（含全國排名）\n"
     "・本月達成率排名 → 本月三項達成率地區排名\n"
     "・今日達成率排名 → 今日三項達成率地區排名\n"
-    "・今日速報 → 今日新增保費速報\n"
+    "・本日最新業績速報 → 本日新增保費速報\n"
     "・達標 → 業展處達標狀況 + 動態慶祝\n"
     "・趨勢比較 → 業展處今日 vs 昨日全國排名升降（▲▼）"
 )
@@ -428,7 +428,7 @@ def build_flex_from_source(source_regions, title, alt_text):
 
 def build_flex_message():
     data = load_performance()
-    return build_flex_from_source(data["regions"], "📊 今日最新業績速報", "最新業績總覽")
+    return build_flex_from_source(data["regions"], "📊 本月最新業績速報", "本月最新業績速報")
 
 
 def calc_dept_rankings_from(dept_source):
@@ -680,13 +680,13 @@ def handle_message(event):
             event.reply_token,
             build_ranking_flex("today", "📊 今日達成率排名")
         )
-    elif text == "今日速報":
+    elif text == "本日最新業績速報":
         data = load_performance()
         line_bot_api.reply_message(
             event.reply_token,
-            build_flex_from_source(data.get("today", data["regions"]), "📊 今日速報", "今日速報")
+            build_flex_from_source(data.get("today", data["regions"]), "📊 本日最新業績速報", "本日最新業績速報")
         )
-    elif text == "最新業績圖":
+    elif text == "本月最新業績速報":
         line_bot_api.reply_message(
             event.reply_token,
             build_flex_message()
