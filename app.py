@@ -54,7 +54,7 @@ HELP_TEXT = (
     "・全國 → 全國報表圖片\n"
     "・最新業績 → 查詢各地區業績數字\n"
     "・本月業績速報 → 業績卡片總覽\n"
-    "・業展處總覽 → 所有業展處本月業績卡片（含全國排名）\n"
+    "・本月業展處總覽 → 所有業展處本月業績卡片（含全國排名）\n"
     "・本日業展處總覽 → 所有業展處本日業績卡片（含全國排名）\n"
     "・本月達成率排名 → 本月三項達成率地區排名\n"
     "・今日達成率排名 → 今日三項達成率地區排名\n"
@@ -678,7 +678,7 @@ def handle_message(event):
         source = event.source
         gid = getattr(source, "group_id", None) or getattr(source, "room_id", None) or source.user_id
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"ID：{gid}"))
-    elif text == "業展處總覽":
+    elif text == "本月業展處總覽":
         line_bot_api.reply_message(
             event.reply_token,
             build_all_depts_flex("departments", "本月", "本月業展處總覽")
