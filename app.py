@@ -61,6 +61,7 @@ HELP_TEXT = (
     "・本月業展處速報 → 所有業展處本月業績卡片（含全國排名）\n"
     "・本日業展處速報 → 所有業展處本日業績卡片（含全國排名）\n"
     "・達成率排名 → 選擇本月或本日達成率地區排名\n"
+    "・業展處排名 → 選擇本月或本日業展處達成率排名（三項各一張）\n"
     "・本日業績速報 → 本日新增保費速報\n"
     "・達標 → 業展處達標狀況 + 動態慶祝\n"
     "・趨勢比較 → 業展處今日 vs 昨日全國排名升降（▲▼）\n"
@@ -312,6 +313,85 @@ def build_ranking_flex(source_key="regions", title="📊 本月達成率排名")
         },
     }
     return FlexSendMessage(alt_text=title, contents=bubble)
+
+
+def build_dept_ranking_flex(source_key="departments", title_prefix="本月"):
+    """業展處三項達成率排名，各指標一張 Bubble，共 3 張 Carousel"""
+    data = load_performance()
+    dept_source = data.get(source_key, {})
+    national_source = data["regions"] if source_key == "departments" else data.get("today", data["regions"])
+    updated = data.get("updated_at", "－")
+
+    # 收集所有業展處資料
+    all_depts = {}
+    for region, dept_names in REGION_DEPARTMENTS.items():
+        dept_data = dept_source.get(region, {})
+        for dept in dept_names:
+            all_depts[dept] = dept_data.get(dept, {})
+
+    CIRCLE_NUMS = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩",
+                   "⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳",
+                   "㉑","㉒","㉓","㉔","㉕","㉖","㉗","㉘","㉙","㉚"]
+
+    def make_bubble(metric_title, key):
+        nat_val = national_source.get("全國", {}).get(key, "0")
+        nat_f = parse_rate_float(nat_val)
+        nat_str = fmt_rate(nat_val)
+
+        scored = [(d, parse_rate_float(v.get(key, "0"))) for d, v in all_depts.items()]
+        scored = [(d, f) for d, f in scored if f is not None]
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        rows = [{
+            "type": "box", "layout": "horizontal",
+            "contents": [
+                {"type": "text", "text": "業展處", "size": "xs", "color": "#888888", "flex": 5},
+                {"type": "text", "text": f"全國 {nat_str}", "size": "xs", "color": "#2471a3", "flex": 4, "align": "end", "weight": "bold"},
+            ],
+            "margin": "sm",
+        }]
+
+        for i, (dept, f) in enumerate(scored):
+            rank = i + 1
+            circle = CIRCLE_NUMS[rank - 1] if rank <= len(CIRCLE_NUMS) else str(rank)
+            manager = DEPARTMENT_MANAGERS.get(dept, "")
+            label = f"{dept} {manager}" if manager else dept
+            rate_color = "#e74c3c" if (nat_f is not None and f < nat_f) else "#222222"
+            rows.append({
+                "type": "box", "layout": "horizontal",
+                "contents": [
+                    {"type": "text", "text": circle, "size": "sm", "color": "#2471a3", "flex": 1, "weight": "bold"},
+                    {"type": "text", "text": label, "size": "xs", "color": "#333333", "flex": 6, "wrap": True},
+                    {"type": "text", "text": fmt_rate(f), "size": "sm", "color": rate_color, "flex": 3, "align": "end", "weight": "bold"},
+                ],
+                "margin": "xs",
+            })
+
+        return {
+            "type": "bubble", "size": "mega",
+            "header": {
+                "type": "box", "layout": "vertical",
+                "contents": [
+                    {"type": "text", "text": f"📊 {title_prefix} {metric_title} 排名", "weight": "bold", "size": "lg", "color": "#1a5276"},
+                    {"type": "text", "text": f"全29業展處 ｜ 截至 {updated}", "size": "xs", "color": "#888888", "margin": "xs"},
+                ],
+                "backgroundColor": "#EBF5FB", "paddingAll": "16px",
+            },
+            "body": {
+                "type": "box", "layout": "vertical",
+                "contents": rows, "paddingAll": "12px", "spacing": "none",
+            },
+        }
+
+    bubbles = [
+        make_bubble("實收達成率", "實收達成率"),
+        make_bubble("A&H達成率", "A&H達成率"),
+        make_bubble("RP達成率", "RP達成率"),
+    ]
+    return FlexSendMessage(
+        alt_text=f"{title_prefix}業展處達成率排名",
+        contents={"type": "carousel", "contents": bubbles}
+    )
 
 
 def build_speed_report(source_key, label):
@@ -706,6 +786,25 @@ def handle_message(event):
         line_bot_api.reply_message(
             event.reply_token,
             build_all_depts_flex("today_departments", "本日", "本日業展處速報")
+        )
+    elif text == "業展處排名":
+        items = [
+            QuickReplyButton(action=MessageAction(label="本月業展處排名", text="本月業展處排名")),
+            QuickReplyButton(action=MessageAction(label="本日業展處排名", text="本日業展處排名")),
+        ]
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="請選擇查詢期間 👇", quick_reply=QuickReply(items=items))
+        )
+    elif text == "本月業展處排名":
+        line_bot_api.reply_message(
+            event.reply_token,
+            build_dept_ranking_flex("departments", "本月")
+        )
+    elif text == "本日業展處排名":
+        line_bot_api.reply_message(
+            event.reply_token,
+            build_dept_ranking_flex("today_departments", "本日")
         )
     elif text == "達成率排名":
         items = [
