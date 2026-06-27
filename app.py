@@ -800,29 +800,28 @@ def handle_message(event):
         msg.quick_reply = qr
         line_bot_api.reply_message(event.reply_token, msg)
     elif text == "業展處三標排行榜":
-        b1 = build_dept_ranking_flex("departments", "本月")
-        b2 = build_dept_ranking_flex("today_departments", "本日")
-        qr = QuickReply(items=[
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(
+                text="請選擇查詢期間 👇",
+                quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="本月業展處三標排行榜", text="本月業展處三標排行榜")),
+                    QuickReplyButton(action=MessageAction(label="本日業展處三標排行榜", text="本日業展處三標排行榜")),
+                ])
+            )
+        )
+    elif text == "本月業展處三標排行榜":
+        msg = build_dept_ranking_flex("departments", "本月")
+        msg.quick_reply = QuickReply(items=[
             QuickReplyButton(action=MessageAction(label="各地區", text="各地區")),
         ])
-        # 合併本月+本日共6張 bubble（各3張）
-        all_bubbles = list(b1.contents.contents) + list(b2.contents.contents)
-        msg = FlexSendMessage(
-            alt_text="業展處三標排行榜",
-            contents={"type": "carousel", "contents": all_bubbles},
-            quick_reply=qr
-        )
         line_bot_api.reply_message(event.reply_token, msg)
-    elif text == "本月業展處三標排行榜":
-        line_bot_api.reply_message(
-            event.reply_token,
-            build_dept_ranking_flex("departments", "本月")
-        )
     elif text == "本日業展處三標排行榜":
-        line_bot_api.reply_message(
-            event.reply_token,
-            build_dept_ranking_flex("today_departments", "本日")
-        )
+        msg = build_dept_ranking_flex("today_departments", "本日")
+        msg.quick_reply = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="各地區", text="各地區")),
+        ])
+        line_bot_api.reply_message(event.reply_token, msg)
     elif text == "三標排行榜":
         b1 = build_ranking_bubble("regions", "📊 本月三標排行榜")
         b2 = build_ranking_bubble("today", "📊 本日三標排行榜")
