@@ -315,6 +315,12 @@ def build_ranking_flex(source_key="regions", title="📊 本月達成率排名")
     return FlexSendMessage(alt_text=title, contents=bubble)
 
 
+def build_ranking_bubble(source_key="regions", title="📊 本月達成率排名"):
+    """回傳單一 bubble dict（供組 carousel 用）"""
+    msg = build_ranking_flex(source_key, title)
+    return msg.contents
+
+
 def build_dept_ranking_flex(source_key="departments", title_prefix="本月"):
     """業展處三項達成率排名，各指標一張 Bubble，共 3 張 Carousel"""
     data = load_performance()
@@ -807,13 +813,11 @@ def handle_message(event):
             build_dept_ranking_flex("today_departments", "本日")
         )
     elif text == "達成率排名":
-        items = [
-            QuickReplyButton(action=MessageAction(label="本月達成率排名", text="本月達成率排名")),
-            QuickReplyButton(action=MessageAction(label="本日達成率排名", text="本日達成率排名")),
-        ]
+        b1 = build_ranking_bubble("regions", "📊 本月達成率排名")
+        b2 = build_ranking_bubble("today", "📊 本日達成率排名")
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text="請選擇查詢期間 👇", quick_reply=QuickReply(items=items))
+            FlexSendMessage(alt_text="達成率排名", contents={"type": "carousel", "contents": [b1, b2]})
         )
     elif text == "本月達成率排名":
         line_bot_api.reply_message(
