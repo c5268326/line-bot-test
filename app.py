@@ -890,6 +890,7 @@ def handle_message(event):
                     QuickReplyButton(action=MessageAction(label="本日業展處速報", text="本日業展處速報")),
                     QuickReplyButton(action=MessageAction(label="本月業展處速報", text="本月業展處速報")),
                     QuickReplyButton(action=MessageAction(label="業展處三標排行榜", text="業展處三標排行榜")),
+                    QuickReplyButton(action=MessageAction(label="各地區", text="各地區")),
                 ])
             )
         )
