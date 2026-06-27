@@ -389,11 +389,28 @@ def build_all_depts_flex():
     return FlexSendMessage(alt_text="業展處總覽", contents={"type": "carousel", "contents": bubbles})
 
 
+def calc_region_rankings(source_regions):
+    """計算各地區三項達成率排名（排除全國），回傳 {region: {key: rank}}"""
+    regions = {r: v for r, v in source_regions.items() if r != "全國"}
+    rankings = {}
+    for key in ("實收達成率", "A&H達成率", "RP達成率"):
+        scored = [(r, parse_rate_float(v.get(key, "0"))) for r, v in regions.items()]
+        scored = [(r, f) for r, f in scored if f is not None]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        for rank, (r, _) in enumerate(scored, 1):
+            rankings.setdefault(r, {})[key] = rank
+    return rankings
+
+
 def build_flex_from_source(source_regions, title, alt_text):
     data = load_performance()
     updated = data.get("updated_at", "－")
     national = source_regions.get("全國", {})
-    region_blocks = [build_region_row(r, v, national=national) for r, v in source_regions.items()]
+    region_rankings = calc_region_rankings(source_regions)
+    region_blocks = [
+        build_region_row(r, v, national=national, rankings=region_rankings.get(r) if r != "全國" else None)
+        for r, v in source_regions.items()
+    ]
     bubble = {
         "type": "bubble",
         "size": "mega",
