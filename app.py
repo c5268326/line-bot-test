@@ -59,7 +59,7 @@ HELP_TEXT = (
     "・今日達成率排名 → 今日三項達成率地區排名\n"
     "・今日速報 → 今日新增保費速報\n"
     "・達標 → 業展處達標狀況 + 動態慶祝\n"
-    "・趨勢比較 → 今日 vs 昨日達成率變化（▲▼）"
+    "・趨勢比較 → 業展處今日 vs 昨日全國排名升降（▲▼）"
 )
 
 
@@ -414,77 +414,106 @@ def build_flex_message():
     return build_flex_from_source(data["regions"], "📊 今日最新業績速報", "最新業績總覽")
 
 
-def trend_arrow(current_val, prev_val):
-    """比較今日 vs 昨日達成率，回傳 ▲/▼/－ 及顏色"""
-    c = parse_rate_float(current_val)
-    p = parse_rate_float(prev_val)
-    if c is None or p is None:
-        return "", "#888888"
-    diff = c - p
-    if diff > 0.001:
-        return f" ▲{diff*100:.1f}%", "#27ae60"
-    elif diff < -0.001:
-        return f" ▼{abs(diff)*100:.1f}%", "#e74c3c"
-    return " →", "#888888"
+def calc_dept_rankings_from(dept_source):
+    """從指定的 today_departments/yesterday_departments 計算排名"""
+    all_depts = {}
+    for region_depts in dept_source.values():
+        for dept, vals in region_depts.items():
+            all_depts[dept] = vals
+    rankings = {}
+    for key in ("實收達成率", "A&H達成率", "RP達成率"):
+        scored = [(d, parse_rate_float(v.get(key, "0"))) for d, v in all_depts.items()]
+        scored = [(d, f) for d, f in scored if f is not None]
+        scored.sort(key=lambda x: x[1], reverse=True)
+        for rank, (dept, _) in enumerate(scored, 1):
+            rankings.setdefault(dept, {})[key] = rank
+    return rankings
 
 
 def build_trend_flex():
-    """今日 vs 昨日達成率趨勢比較"""
+    """今日 vs 昨日全國排名變化（業展處）"""
     data = load_performance()
-    today = data.get("today", {})
-    yesterday = data.get("yesterday", {})
-    regions_data = data.get("regions", {})
+    today_depts   = data.get("today_departments", {})
+    yest_depts    = data.get("yesterday_departments", {})
     updated = data.get("updated_at", "－")
 
-    if not today:
+    # 需要今日和昨日都有資料才能比較
+    has_today = any(today_depts.get(r) for r in REGION_DEPARTMENTS)
+    has_yest  = any(yest_depts.get(r) for r in REGION_DEPARTMENTS)
+    if not has_today:
         return None
 
-    blocks = []
-    for region in ["全國", "台北一區", "台北二區", "桃竹苗區", "中部地區", "南部地區"]:
-        t_vals = today.get(region, {})
-        y_vals = yesterday.get(region, {})
-        if not t_vals:
-            continue
+    today_ranks = calc_dept_rankings_from(today_depts)
+    yest_ranks  = calc_dept_rankings_from(yest_depts) if has_yest else {}
 
-        blocks.append({
-            "type": "text", "text": f"【{region}】",
-            "weight": "bold", "size": "sm", "color": "#1a5276", "margin": "md"
+    CIRCLE_NUMS = ["①","②","③","④","⑤","⑥","⑦","⑧","⑨","⑩",
+                   "⑪","⑫","⑬","⑭","⑮","⑯","⑰","⑱","⑲","⑳",
+                   "㉑","㉒","㉓","㉔","㉕","㉖","㉗","㉘","㉙","㉚"]
+
+    def circle(r):
+        return CIRCLE_NUMS[r-1] if r and r <= len(CIRCLE_NUMS) else str(r)
+
+    def rank_change(dept, key):
+        t = today_ranks.get(dept, {}).get(key)
+        y = yest_ranks.get(dept, {}).get(key)
+        if t is None:
+            return "－", "#888888"
+        today_str = circle(t)
+        if y is None or not has_yest:
+            return today_str, "#222222"
+        diff = y - t  # 排名數字變小 = 名次上升 → ▲
+        if diff > 0:
+            return f"{today_str} ▲{diff}", "#27ae60"
+        elif diff < 0:
+            return f"{today_str} ▼{abs(diff)}", "#e74c3c"
+        return f"{today_str} →", "#888888"
+
+    bubbles = []
+    for region, dept_names in REGION_DEPARTMENTS.items():
+        blocks = []
+        for dept in dept_names:
+            manager = DEPARTMENT_MANAGERS.get(dept, "")
+            label = f"{dept} {manager}" if manager else dept
+            blocks.append({
+                "type": "text", "text": label,
+                "weight": "bold", "size": "xs", "color": "#1a5276", "margin": "md"
+            })
+            row_items = []
+            for short, key in [("實收", "實收達成率"), ("A&H", "A&H達成率"), ("RP", "RP達成率")]:
+                text, color = rank_change(dept, key)
+                row_items.append({
+                    "type": "box", "layout": "horizontal",
+                    "contents": [
+                        {"type": "text", "text": short, "size": "xs", "color": "#666666", "flex": 2},
+                        {"type": "text", "text": text, "size": "xs", "color": color, "flex": 5, "align": "end", "weight": "bold"},
+                    ],
+                    "margin": "xs",
+                })
+            blocks.extend(row_items)
+            blocks.append({"type": "separator", "margin": "xs"})
+
+        bubbles.append({
+            "type": "bubble", "size": "mega",
+            "header": {
+                "type": "box", "layout": "vertical",
+                "contents": [
+                    {"type": "text", "text": f"📈 {region} 排名變化", "weight": "bold", "size": "lg", "color": "#1a5276"},
+                    {"type": "text", "text": f"今日排名 ▲上升 ▼下降 ｜ 截至 {updated}", "size": "xs", "color": "#888888", "margin": "xs"},
+                ],
+                "backgroundColor": "#EBF5FB", "paddingAll": "16px",
+            },
+            "body": {
+                "type": "box", "layout": "vertical",
+                "contents": blocks, "paddingAll": "12px", "spacing": "none",
+            },
         })
 
-        for label, key in [("實收", "實收達成率"), ("A&H", "A&H達成率"), ("RP", "RP達成率")]:
-            cur = t_vals.get(key, "－")
-            prev = y_vals.get(key, "－")
-            arrow, arrow_color = trend_arrow(cur, prev)
-            blocks.append({
-                "type": "box", "layout": "horizontal",
-                "contents": [
-                    {"type": "text", "text": label, "size": "sm", "color": "#666666", "flex": 2},
-                    {"type": "text", "text": fmt_rate(cur), "size": "sm", "color": "#222222", "flex": 3, "align": "end", "weight": "bold"},
-                    {"type": "text", "text": arrow if arrow else "－", "size": "sm", "color": arrow_color, "flex": 4, "align": "end"},
-                ],
-                "margin": "xs",
-            })
-        blocks.append({"type": "separator", "margin": "sm"})
+    return FlexSendMessage(
+        alt_text="業展處排名趨勢比較",
+        contents={"type": "carousel", "contents": bubbles}
+    )
 
-    if not blocks:
-        return None
 
-    bubble = {
-        "type": "bubble", "size": "mega",
-        "header": {
-            "type": "box", "layout": "vertical",
-            "contents": [
-                {"type": "text", "text": "📈 今日 vs 昨日 趨勢比較", "weight": "bold", "size": "lg", "color": "#1a5276"},
-                {"type": "text", "text": f"截至 {updated}", "size": "xs", "color": "#888888", "margin": "xs"},
-            ],
-            "backgroundColor": "#EBF5FB", "paddingAll": "16px",
-        },
-        "body": {
-            "type": "box", "layout": "vertical",
-            "contents": blocks, "paddingAll": "12px", "spacing": "none",
-        },
-    }
-    return FlexSendMessage(alt_text="今日 vs 昨日趨勢比較", contents=bubble)
 
 
 def build_achieved_flex():
