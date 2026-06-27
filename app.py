@@ -1,7 +1,11 @@
 from flask import Flask, request, abort
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, TextSendMessage, ImageSendMessage, FlexSendMessage, StickerSendMessage
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage, ImageSendMessage,
+    FlexSendMessage, StickerSendMessage,
+    QuickReply, QuickReplyButton, MessageAction
+)
 import os
 import json
 from datetime import datetime, timezone, timedelta
@@ -60,8 +64,22 @@ HELP_TEXT = (
     "・今日達成率排名 → 今日三項達成率地區排名\n"
     "・本日業績速報 → 本日新增保費速報\n"
     "・達標 → 業展處達標狀況 + 動態慶祝\n"
-    "・趨勢比較 → 業展處今日 vs 昨日全國排名升降（▲▼）"
+    "・趨勢比較 → 業展處今日 vs 昨日全國排名升降（▲▼）\n"
+    "・各地區 → 點選地區快速查詢"
 )
+
+
+def build_region_quickreply():
+    """回傳地區選擇 Quick Reply 訊息"""
+    regions = ["台北一區", "台北二區", "桃竹苗區", "中部地區", "南部地區"]
+    items = [
+        QuickReplyButton(action=MessageAction(label=r, text=r))
+        for r in regions
+    ]
+    return TextSendMessage(
+        text="請選擇地區 👇",
+        quick_reply=QuickReply(items=items)
+    )
 
 
 def load_performance():
@@ -663,7 +681,9 @@ def webhook():
 def handle_message(event):
     text = event.message.text.strip()
 
-    if text == "達標":
+    if text == "各地區":
+        line_bot_api.reply_message(event.reply_token, build_region_quickreply())
+    elif text == "達標":
         flex_msg = build_achieved_flex()
         # LINE 官方動態貼圖（Lottie 渲染）：package 11537 Brown & Friends 慶祝動態
         sticker = StickerSendMessage(package_id="11537", sticker_id="52002740")
