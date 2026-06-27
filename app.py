@@ -54,7 +54,8 @@ HELP_TEXT = (
     "・全國 → 全國報表圖片\n"
     "・最新業績 → 查詢各地區業績數字\n"
     "・本月業績速報 → 業績卡片總覽\n"
-    "・業展處總覽 → 所有業展處業績卡片（含全國排名）\n"
+    "・業展處總覽 → 所有業展處本月業績卡片（含全國排名）\n"
+    "・本日業展處總覽 → 所有業展處本日業績卡片（含全國排名）\n"
     "・本月達成率排名 → 本月三項達成率地區排名\n"
     "・今日達成率排名 → 今日三項達成率地區排名\n"
     "・本日業績速報 → 本日新增保費速報\n"
@@ -341,6 +342,9 @@ def build_region_detail_flex(region):
         }
 
     all_rankings = calc_dept_rankings(data)
+    today_dept_data = data.get("today_departments", {}).get(region, {})
+    today_national = data.get("today", {}).get("全國", {})
+    today_rankings = calc_dept_rankings_from(data.get("today_departments", {}))
 
     bubble1 = make_bubble(f"📊 {region} 業績總覽", [
         build_region_row("全國", national),
@@ -353,20 +357,29 @@ def build_region_detail_flex(region):
         values = dept_data.get(dept, {})
         label = f"{dept}　{manager}" if manager else dept
         dept_blocks.append(build_region_row(label, values, national=national, rankings=all_rankings.get(dept)))
-    bubble2 = make_bubble(f"📊 {region} 業展處", dept_blocks)
+    bubble2 = make_bubble(f"📊 {region} 本月業展處", dept_blocks)
 
-    return FlexSendMessage(alt_text=f"{region}業績詳情", contents={"type": "carousel", "contents": [bubble1, bubble2]})
+    today_blocks = []
+    for dept in dept_names:
+        manager = DEPARTMENT_MANAGERS.get(dept, "")
+        values = today_dept_data.get(dept, {})
+        label = f"{dept}　{manager}" if manager else dept
+        today_blocks.append(build_region_row(label, values, national=today_national, rankings=today_rankings.get(dept)))
+    bubble3 = make_bubble(f"📊 {region} 本日業展處", today_blocks)
+
+    return FlexSendMessage(alt_text=f"{region}業績詳情", contents={"type": "carousel", "contents": [bubble1, bubble2, bubble3]})
 
 
-def build_all_depts_flex():
+def build_all_depts_flex(source_key="departments", title_prefix="本月", alt_text="本月業展處總覽"):
     data = load_performance()
-    national = data["regions"].get("全國", {})
+    national_key = "regions" if source_key == "departments" else "today"
+    national = data.get(national_key, data["regions"]).get("全國", {})
     updated = data.get("updated_at", "－")
-    all_rankings = calc_dept_rankings(data)
+    all_rankings = calc_dept_rankings_from(data.get(source_key, {}))
 
     bubbles = []
     for region, dept_names in REGION_DEPARTMENTS.items():
-        dept_data = data.get("departments", {}).get(region, {})
+        dept_data = data.get(source_key, {}).get(region, {})
         blocks = []
         for dept in dept_names:
             manager = DEPARTMENT_MANAGERS.get(dept, "")
@@ -376,7 +389,7 @@ def build_all_depts_flex():
         bubbles.append({
             "type": "bubble",
             "size": "mega",
-            "header": make_bubble_header(f"📊 {region} 業展處", updated),
+            "header": make_bubble_header(f"📊 {region} {title_prefix}業展處", updated),
             "body": {
                 "type": "box",
                 "layout": "vertical",
@@ -386,7 +399,7 @@ def build_all_depts_flex():
             },
         })
 
-    return FlexSendMessage(alt_text="業展處總覽", contents={"type": "carousel", "contents": bubbles})
+    return FlexSendMessage(alt_text=alt_text, contents={"type": "carousel", "contents": bubbles})
 
 
 def calc_region_rankings(source_regions):
@@ -668,7 +681,12 @@ def handle_message(event):
     elif text == "業展處總覽":
         line_bot_api.reply_message(
             event.reply_token,
-            build_all_depts_flex()
+            build_all_depts_flex("departments", "本月", "本月業展處總覽")
+        )
+    elif text == "本日業展處總覽":
+        line_bot_api.reply_message(
+            event.reply_token,
+            build_all_depts_flex("today_departments", "本日", "本日業展處總覽")
         )
     elif text == "本月達成率排名":
         line_bot_api.reply_message(
