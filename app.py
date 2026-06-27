@@ -58,8 +58,8 @@ HELP_TEXT = (
     "・全國 → 全國報表圖片\n"
     "・最新業績 → 查詢各地區業績數字\n"
     "・本月業績速報 → 業績卡片總覽\n"
-    "・本月業展處總覽 → 所有業展處本月業績卡片（含全國排名）\n"
-    "・本日業展處總覽 → 所有業展處本日業績卡片（含全國排名）\n"
+    "・本月業展處速報 → 所有業展處本月業績卡片（含全國排名）\n"
+    "・本日業展處速報 → 所有業展處本日業績卡片（含全國排名）\n"
     "・本月達成率排名 → 本月三項達成率地區排名\n"
     "・今日達成率排名 → 今日三項達成率地區排名\n"
     "・本日業績速報 → 本日新增保費速報\n"
@@ -388,7 +388,7 @@ def build_region_detail_flex(region):
     return FlexSendMessage(alt_text=f"{region}業績詳情", contents={"type": "carousel", "contents": [bubble1, bubble2, bubble3]})
 
 
-def build_all_depts_flex(source_key="departments", title_prefix="本月", alt_text="本月業展處總覽"):
+def build_all_depts_flex(source_key="departments", title_prefix="本月", alt_text="本月業展處速報"):
     data = load_performance()
     national_key = "regions" if source_key == "departments" else "today"
     national = data.get(national_key, data["regions"]).get("全國", {})
@@ -698,15 +698,15 @@ def handle_message(event):
         source = event.source
         gid = getattr(source, "group_id", None) or getattr(source, "room_id", None) or source.user_id
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"ID：{gid}"))
-    elif text == "本月業展處總覽":
+    elif text == "本月業展處速報":
         line_bot_api.reply_message(
             event.reply_token,
-            build_all_depts_flex("departments", "本月", "本月業展處總覽")
+            build_all_depts_flex("departments", "本月", "本月業展處速報")
         )
-    elif text == "本日業展處總覽":
+    elif text == "本日業展處速報":
         line_bot_api.reply_message(
             event.reply_token,
-            build_all_depts_flex("today_departments", "本日", "本日業展處總覽")
+            build_all_depts_flex("today_departments", "本日", "本日業展處速報")
         )
     elif text == "本月達成率排名":
         line_bot_api.reply_message(
