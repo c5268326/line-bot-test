@@ -784,24 +784,35 @@ def handle_message(event):
         gid = getattr(source, "group_id", None) or getattr(source, "room_id", None) or source.user_id
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=f"ID：{gid}"))
     elif text == "本月業展處速報":
-        line_bot_api.reply_message(
-            event.reply_token,
-            build_all_depts_flex("departments", "本月", "本月業展處速報")
-        )
+        qr = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="各地區", text="各地區")),
+            QuickReplyButton(action=MessageAction(label="業展處三標排行榜", text="業展處三標排行榜")),
+        ])
+        msg = build_all_depts_flex("departments", "本月", "本月業展處速報")
+        msg.quick_reply = qr
+        line_bot_api.reply_message(event.reply_token, msg)
     elif text == "本日業展處速報":
-        line_bot_api.reply_message(
-            event.reply_token,
-            build_all_depts_flex("today_departments", "本日", "本日業展處速報")
-        )
+        qr = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="本月業展處速報", text="本月業展處速報")),
+            QuickReplyButton(action=MessageAction(label="業展處三標排行榜", text="業展處三標排行榜")),
+        ])
+        msg = build_all_depts_flex("today_departments", "本日", "本日業展處速報")
+        msg.quick_reply = qr
+        line_bot_api.reply_message(event.reply_token, msg)
     elif text == "業展處三標排行榜":
-        items = [
-            QuickReplyButton(action=MessageAction(label="本月業展處三標排行榜", text="本月業展處三標排行榜")),
-            QuickReplyButton(action=MessageAction(label="本日業展處三標排行榜", text="本日業展處三標排行榜")),
-        ]
-        line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="請選擇查詢期間 👇", quick_reply=QuickReply(items=items))
+        b1 = build_dept_ranking_flex("departments", "本月")
+        b2 = build_dept_ranking_flex("today_departments", "本日")
+        qr = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="各地區", text="各地區")),
+        ])
+        # 合併本月+本日共6張 bubble（各3張）
+        all_bubbles = b1.contents["contents"] + b2.contents["contents"]
+        msg = FlexSendMessage(
+            alt_text="業展處三標排行榜",
+            contents={"type": "carousel", "contents": all_bubbles},
+            quick_reply=qr
         )
+        line_bot_api.reply_message(event.reply_token, msg)
     elif text == "本月業展處三標排行榜":
         line_bot_api.reply_message(
             event.reply_token,
@@ -815,9 +826,17 @@ def handle_message(event):
     elif text == "三標排行榜":
         b1 = build_ranking_bubble("regions", "📊 本月三標排行榜")
         b2 = build_ranking_bubble("today", "📊 本日三標排行榜")
+        qr = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="業展處三標排行榜", text="業展處三標排行榜")),
+            QuickReplyButton(action=MessageAction(label="達標", text="達標")),
+        ])
         line_bot_api.reply_message(
             event.reply_token,
-            FlexSendMessage(alt_text="三標排行榜", contents={"type": "carousel", "contents": [b1, b2]})
+            FlexSendMessage(
+                alt_text="三標排行榜",
+                contents={"type": "carousel", "contents": [b1, b2]},
+                quick_reply=qr
+            )
         )
     elif text == "本月三標排行榜":
         line_bot_api.reply_message(
@@ -831,15 +850,21 @@ def handle_message(event):
         )
     elif text == "本日業績速報":
         data = load_performance()
-        line_bot_api.reply_message(
-            event.reply_token,
-            build_flex_from_source(data.get("today", data["regions"]), "📊 本日業績速報", "本日業績速報")
-        )
+        qr = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="本日業展處速報", text="本日業展處速報")),
+            QuickReplyButton(action=MessageAction(label="三標排行榜", text="三標排行榜")),
+        ])
+        msg = build_flex_from_source(data.get("today", data["regions"]), "📊 本日業績速報", "本日業績速報")
+        msg.quick_reply = qr
+        line_bot_api.reply_message(event.reply_token, msg)
     elif text == "本月業績速報":
-        line_bot_api.reply_message(
-            event.reply_token,
-            build_flex_message()
-        )
+        qr = QuickReply(items=[
+            QuickReplyButton(action=MessageAction(label="本月業展處速報", text="本月業展處速報")),
+            QuickReplyButton(action=MessageAction(label="三標排行榜", text="三標排行榜")),
+        ])
+        msg = build_flex_message()
+        msg.quick_reply = qr
+        line_bot_api.reply_message(event.reply_token, msg)
     elif text in REGION_DEPARTMENTS:
         line_bot_api.reply_message(
             event.reply_token,
