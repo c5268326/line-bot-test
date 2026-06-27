@@ -60,8 +60,8 @@ HELP_TEXT = (
     "・本月業績速報 → 業績卡片總覽\n"
     "・本月業展處速報 → 所有業展處本月業績卡片（含全國排名）\n"
     "・本日業展處速報 → 所有業展處本日業績卡片（含全國排名）\n"
-    "・達成率排名 → 選擇本月或本日達成率地區排名\n"
-    "・業展處排名 → 選擇本月或本日業展處達成率排名（三項各一張）\n"
+    "・三標排行榜 → 選擇本月或本日達成率地區排名\n"
+    "・業展處三標排行榜 → 選擇本月或本日業展處三標排行榜（三項各一張）\n"
     "・本日業績速報 → 本日新增保費速報\n"
     "・達標 → 業展處達標狀況 + 動態慶祝\n"
     "・趨勢比較 → 業展處今日 vs 昨日全國排名升降（▲▼）\n"
@@ -243,7 +243,7 @@ def to_yi(val):
         return val
 
 
-def build_ranking_flex(source_key="regions", title="📊 本月達成率排名"):
+def build_ranking_flex(source_key="regions", title="📊 本月三標排行榜"):
     data = load_performance()
     source = data.get(source_key, data["regions"])
     regions = {r: v for r, v in source.items() if r != "全國"}
@@ -315,14 +315,14 @@ def build_ranking_flex(source_key="regions", title="📊 本月達成率排名")
     return FlexSendMessage(alt_text=title, contents=bubble)
 
 
-def build_ranking_bubble(source_key="regions", title="📊 本月達成率排名"):
+def build_ranking_bubble(source_key="regions", title="📊 本月三標排行榜"):
     """回傳單一 bubble dict（供組 carousel 用）"""
     msg = build_ranking_flex(source_key, title)
     return msg.contents
 
 
 def build_dept_ranking_flex(source_key="departments", title_prefix="本月"):
-    """業展處三項達成率排名，各指標一張 Bubble，共 3 張 Carousel"""
+    """業展處三項三標排行榜，各指標一張 Bubble，共 3 張 Carousel"""
     data = load_performance()
     dept_source = data.get(source_key, {})
     national_source = data["regions"] if source_key == "departments" else data.get("today", data["regions"])
@@ -395,7 +395,7 @@ def build_dept_ranking_flex(source_key="departments", title_prefix="本月"):
         make_bubble("RP達成率", "RP達成率"),
     ]
     return FlexSendMessage(
-        alt_text=f"{title_prefix}業展處達成率排名",
+        alt_text=f"{title_prefix}業展處三標排行榜",
         contents={"type": "carousel", "contents": bubbles}
     )
 
@@ -506,7 +506,7 @@ def build_all_depts_flex(source_key="departments", title_prefix="本月", alt_te
 
 
 def calc_region_rankings(source_regions):
-    """計算各地區三項達成率排名（排除全國），回傳 {region: {key: rank}}"""
+    """計算各地區三項三標排行榜（排除全國），回傳 {region: {key: rank}}"""
     regions = {r: v for r, v in source_regions.items() if r != "全國"}
     rankings = {}
     for key in ("實收達成率", "A&H達成率", "RP達成率"):
@@ -642,7 +642,7 @@ def build_trend_flex():
         })
 
     return FlexSendMessage(
-        alt_text="業展處排名趨勢比較",
+        alt_text="業展處三標排行榜趨勢比較",
         contents={"type": "carousel", "contents": bubbles}
     )
 
@@ -793,41 +793,41 @@ def handle_message(event):
             event.reply_token,
             build_all_depts_flex("today_departments", "本日", "本日業展處速報")
         )
-    elif text == "業展處排名":
+    elif text == "業展處三標排行榜":
         items = [
-            QuickReplyButton(action=MessageAction(label="本月業展處排名", text="本月業展處排名")),
-            QuickReplyButton(action=MessageAction(label="本日業展處排名", text="本日業展處排名")),
+            QuickReplyButton(action=MessageAction(label="本月業展處三標排行榜", text="本月業展處三標排行榜")),
+            QuickReplyButton(action=MessageAction(label="本日業展處三標排行榜", text="本日業展處三標排行榜")),
         ]
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text="請選擇查詢期間 👇", quick_reply=QuickReply(items=items))
         )
-    elif text == "本月業展處排名":
+    elif text == "本月業展處三標排行榜":
         line_bot_api.reply_message(
             event.reply_token,
             build_dept_ranking_flex("departments", "本月")
         )
-    elif text == "本日業展處排名":
+    elif text == "本日業展處三標排行榜":
         line_bot_api.reply_message(
             event.reply_token,
             build_dept_ranking_flex("today_departments", "本日")
         )
-    elif text == "達成率排名":
-        b1 = build_ranking_bubble("regions", "📊 本月達成率排名")
-        b2 = build_ranking_bubble("today", "📊 本日達成率排名")
+    elif text == "三標排行榜":
+        b1 = build_ranking_bubble("regions", "📊 本月三標排行榜")
+        b2 = build_ranking_bubble("today", "📊 本日三標排行榜")
         line_bot_api.reply_message(
             event.reply_token,
-            FlexSendMessage(alt_text="達成率排名", contents={"type": "carousel", "contents": [b1, b2]})
+            FlexSendMessage(alt_text="三標排行榜", contents={"type": "carousel", "contents": [b1, b2]})
         )
-    elif text == "本月達成率排名":
+    elif text == "本月三標排行榜":
         line_bot_api.reply_message(
             event.reply_token,
-            build_ranking_flex("regions", "📊 本月達成率排名")
+            build_ranking_flex("regions", "📊 本月三標排行榜")
         )
-    elif text == "本日達成率排名":
+    elif text == "本日三標排行榜":
         line_bot_api.reply_message(
             event.reply_token,
-            build_ranking_flex("today", "📊 本日達成率排名")
+            build_ranking_flex("today", "📊 本日三標排行榜")
         )
     elif text == "本日業績速報":
         data = load_performance()
