@@ -806,7 +806,7 @@ def handle_message(event):
             QuickReplyButton(action=MessageAction(label="各地區", text="各地區")),
         ])
         # 合併本月+本日共6張 bubble（各3張）
-        all_bubbles = b1.contents["contents"] + b2.contents["contents"]
+        all_bubbles = list(b1.contents.contents) + list(b2.contents.contents)
         msg = FlexSendMessage(
             alt_text="業展處三標排行榜",
             contents={"type": "carousel", "contents": all_bubbles},
