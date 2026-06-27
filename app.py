@@ -881,7 +881,17 @@ def handle_message(event):
     else:
         line_bot_api.reply_message(
             event.reply_token,
-            TextSendMessage(text=HELP_TEXT)
+            TextSendMessage(
+                text="請選擇功能 👇",
+                quick_reply=QuickReply(items=[
+                    QuickReplyButton(action=MessageAction(label="本日業績速報", text="本日業績速報")),
+                    QuickReplyButton(action=MessageAction(label="本月業績速報", text="本月業績速報")),
+                    QuickReplyButton(action=MessageAction(label="三標排行榜", text="三標排行榜")),
+                    QuickReplyButton(action=MessageAction(label="本日業展處速報", text="本日業展處速報")),
+                    QuickReplyButton(action=MessageAction(label="本月業展處速報", text="本月業展處速報")),
+                    QuickReplyButton(action=MessageAction(label="業展處三標排行榜", text="業展處三標排行榜")),
+                ])
+            )
         )
 
 
