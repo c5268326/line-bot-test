@@ -897,6 +897,39 @@ def handle_message(event):
         )
 
 
+WELCOME_QR = QuickReply(items=[
+    QuickReplyButton(action=MessageAction(label="本日業績速報", text="本日業績速報")),
+    QuickReplyButton(action=MessageAction(label="本月業績速報", text="本月業績速報")),
+    QuickReplyButton(action=MessageAction(label="三標排行榜", text="三標排行榜")),
+    QuickReplyButton(action=MessageAction(label="本日業展處速報", text="本日業展處速報")),
+    QuickReplyButton(action=MessageAction(label="本月業展處速報", text="本月業展處速報")),
+    QuickReplyButton(action=MessageAction(label="業展處三標排行榜", text="業展處三標排行榜")),
+    QuickReplyButton(action=MessageAction(label="各地區", text="各地區")),
+])
+
+WELCOME_TEXT = (
+    "👋 歡迎加入 南山業績速報！\n"
+    "即時查詢各地區與業展處業績資訊。\n\n"
+    "請選擇功能開始使用 👇"
+)
+
+
+@handler.add(FollowEvent)
+def handle_follow(event):
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=WELCOME_TEXT, quick_reply=WELCOME_QR)
+    )
+
+
+@handler.add(MemberJoinedEvent)
+def handle_member_join(event):
+    line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text=WELCOME_TEXT, quick_reply=WELCOME_QR)
+    )
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
