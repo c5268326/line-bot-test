@@ -7,6 +7,7 @@ from email.header import decode_header
 import os
 import json
 import io
+import re
 import requests
 from datetime import datetime, timezone, timedelta
 import openpyxl
@@ -174,6 +175,21 @@ def _extract_new_format(row, today=False):
         return {"實收保費": v(17), "實收達成率": v(18), "A&H保費": v(23), "A&H達成率": v(24), "RP保費": v(27), "RP達成率": v(28)}
 
 
+def _parse_report_time(all_rows):
+    """從 row0 col14 的標題文字解析報表時間，如：6/26 11點 → 2026/06/26 11:00"""
+    try:
+        header = str(all_rows[0][14]) if len(all_rows[0]) > 14 else ""
+        m = re.search(r'(\d+)/(\d+)\s+(\d+)點', header)
+        if m:
+            TW = timezone(timedelta(hours=8))
+            year = datetime.now(TW).year
+            month, day, hour = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            return f"{year}/{month:02d}/{day:02d} {hour:02d}:00"
+    except Exception:
+        pass
+    return None
+
+
 def _parse_new_format(all_rows):
     """解析新版單工作表格式（業發部_業展處_三時段整點）"""
     monthly = {}
@@ -199,7 +215,9 @@ def _parse_new_format(all_rows):
             today[dept_name] = _extract_new_format(row, today=True)
             print(f"✅ 業展處：{region}[{i+1}] → {dept_name}")
 
-    return monthly, today
+    report_time = _parse_report_time(all_rows)
+    print(f"📅 報表時間：{report_time}")
+    return monthly, today, report_time
 
 
 def parse_xls(file_bytes):
@@ -215,7 +233,7 @@ def parse_excel(file_bytes):
     return _parse_new_format(all_rows)
 
 
-def update_performance(monthly, today):
+def update_performance(monthly, today, report_time=None):
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
 
@@ -254,8 +272,11 @@ def update_performance(monthly, today):
                         print(f"✅ 今日更新 {name}")
                         break
 
-    TW = timezone(timedelta(hours=8))
-    data["updated_at"] = datetime.now(TW).strftime("%Y/%m/%d %H:%M")
+    if report_time:
+        data["updated_at"] = report_time
+    else:
+        TW = timezone(timedelta(hours=8))
+        data["updated_at"] = datetime.now(TW).strftime("%Y/%m/%d %H:%M")
 
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
@@ -381,11 +402,11 @@ def main():
     file_bytes, filename = get_latest_excel()
     if file_bytes:
         if filename.endswith(".xls"):
-            monthly, today = parse_xls(file_bytes)
+            monthly, today, report_time = parse_xls(file_bytes)
         else:
-            monthly, today = parse_excel(file_bytes)
+            monthly, today, report_time = parse_excel(file_bytes)
         if monthly:
-            update_performance(monthly, today)
+            update_performance(monthly, today, report_time)
             broadcast_performance()
         else:
             print("⚠️ Excel 內找不到對應地區資料，請確認欄位格式")
