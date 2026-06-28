@@ -303,7 +303,7 @@ def fmt_rate(val):
             return s
     try:
         n = float(s)
-        if n <= 1.5:
+        if n < 20:
             return f"{n * 100:.1f}%"
         return f"{n:.1f}%"
     except ValueError:
@@ -314,7 +314,7 @@ def parse_rate_float(val):
     s = str(val).strip().replace("%", "")
     try:
         n = float(s)
-        return n / 100 if n > 1.5 else n
+        return n / 100 if n >= 20 else n
     except ValueError:
         return None
 
