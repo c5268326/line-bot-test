@@ -139,41 +139,80 @@ def parse_excel(file_bytes):
     return results
 
 
-def parse_sheet(ws_or_rows, is_xlrd=False):
-    """通用解析：7欄格式 A=地區/業展處 B=實收 C=實收達成率 D=A&H E=A&H達成率 F=RP G=RP達成率"""
-    results = {}
-    rows = ws_or_rows if is_xlrd else list(ws_or_rows)
-    for row in rows:
-        vals = row if is_xlrd else list(row)
-        name = str(vals[0]).strip() if vals[0] else ""
-        if name not in ALL_NAMES:
-            continue
-        def v(i): return str(vals[i]) if len(vals) > i and vals[i] not in (None, "") else "－"
-        results[name] = {
-            "實收保費": v(1), "實收達成率": v(2),
-            "A&H保費": v(3), "A&H達成率": v(4),
-            "RP保費": v(5), "RP達成率": v(6),
-        }
-    return results
+# 新格式：Excel 地區名稱 → 系統地區名稱
+REGION_NAME_MAP = {
+    "北一業發部": "台北一區",
+    "北二業發部": "台北二區",
+    "桃竹苗業發部": "桃竹苗區",
+    "中區業發部": "中部地區",
+    "南區業發部": "南部地區",
+    "合計": "全國",
+}
+
+# 新格式：各地區業展處在 all_rows 中的起始列索引與數量（0-based）
+# 地區列：rows 2-7（0-based），業展處：rows 11-39（0-based）
+DEPT_ROW_MAP = {
+    "台北一區":  (11, 7),
+    "台北二區":  (18, 7),
+    "桃竹苗區":  (25, 4),
+    "中部地區":  (29, 7),
+    "南部地區":  (36, 4),
+}
+
+
+def _extract_new_format(row, today=False):
+    """從新格式列擷取業績欄位"""
+    def v(i):
+        val = row[i] if len(row) > i else None
+        return str(val) if val not in (None, "") else "－"
+
+    if today:
+        # col 8=當日實收, 9=當日實收率, 10=當日A&H, 11=當日A&H率, 12=當日RP, 13=當日RP率
+        return {"實收保費": v(8), "實收達成率": v(9), "A&H保費": v(10), "A&H達成率": v(11), "RP保費": v(12), "RP達成率": v(13)}
+    else:
+        # col 17=本月實收, 18=本月實收率, 23=A&H, 24=A&H率, 27=期繳, 28=期繳率
+        return {"實收保費": v(17), "實收達成率": v(18), "A&H保費": v(23), "A&H達成率": v(24), "RP保費": v(27), "RP達成率": v(28)}
+
+
+def _parse_new_format(all_rows):
+    """解析新版單工作表格式（業發部_業展處_三時段整點）"""
+    monthly = {}
+    today = {}
+
+    # 地區列 rows 2-7（含合計）
+    for row in all_rows[2:8]:
+        raw = str(row[0]).strip() if row[0] else ""
+        sys_name = REGION_NAME_MAP.get(raw)
+        if sys_name:
+            monthly[sys_name] = _extract_new_format(row, today=False)
+            today[sys_name] = _extract_new_format(row, today=True)
+            print(f"✅ 地區：{raw} → {sys_name}")
+
+    # 業展處列（依位置對應部門名稱）
+    for region, (start_idx, count) in DEPT_ROW_MAP.items():
+        dept_names = DEPARTMENTS[region]
+        for i, row in enumerate(all_rows[start_idx:start_idx + count]):
+            if i >= len(dept_names):
+                break
+            dept_name = dept_names[i]
+            monthly[dept_name] = _extract_new_format(row, today=False)
+            today[dept_name] = _extract_new_format(row, today=True)
+            print(f"✅ 業展處：{region}[{i+1}] → {dept_name}")
+
+    return monthly, today
 
 
 def parse_xls(file_bytes):
     wb = xlrd.open_workbook(file_contents=file_bytes.read())
-    monthly = parse_sheet([wb.sheet_by_index(0).row_values(i) for i in range(1, wb.sheet_by_index(0).nrows)], is_xlrd=True)
-    today = {}
-    if wb.nsheets >= 2:
-        ws2 = wb.sheet_by_index(1)
-        today = parse_sheet([ws2.row_values(i) for i in range(1, ws2.nrows)], is_xlrd=True)
-    return monthly, today
+    all_rows = [wb.sheet_by_index(0).row_values(i) for i in range(wb.sheet_by_index(0).nrows)]
+    return _parse_new_format(all_rows)
 
 
 def parse_excel(file_bytes):
     wb = openpyxl.load_workbook(file_bytes, data_only=True)
-    monthly = parse_sheet(wb.worksheets[0].iter_rows(min_row=2, values_only=True))
-    today = {}
-    if len(wb.worksheets) >= 2:
-        today = parse_sheet(wb.worksheets[1].iter_rows(min_row=2, values_only=True))
-    return monthly, today
+    all_rows = list(wb.worksheets[0].iter_rows(values_only=True))
+    print(f"工作表：{wb.worksheets[0].title}，共 {len(all_rows)} 列")
+    return _parse_new_format(all_rows)
 
 
 def update_performance(monthly, today):
