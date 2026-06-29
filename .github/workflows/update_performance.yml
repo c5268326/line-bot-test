@@ -42,42 +42,4 @@ jobs:
         env:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-        run: |
-          python3 - <<'EOF'
-          import smtplib, os, json
-          from email.mime.text import MIMEText
-          from datetime import datetime, timezone, timedelta
-
-          user = os.environ["GMAIL_USER"]
-          password = os.environ["GMAIL_APP_PASSWORD"]
-
-          TW = timezone(timedelta(hours=8))
-          now = datetime.now(TW).strftime("%Y/%m/%d %H:%M")
-
-          try:
-              with open("data/performance.json", encoding="utf-8") as f:
-                  data = json.load(f)
-              updated = data.get("updated_at", "－")
-              broadcast = "✅ 已廣播" if data.get("last_broadcast_date") == datetime.now(TW).strftime("%Y/%m/%d") else "⏭️ 略過廣播"
-          except Exception:
-              updated = "－"
-              broadcast = "不明"
-
-          body = f"""南山業績 LINE Bot 執行完成
-
-執行時間：{now}
-資料時間：{updated}
-廣播狀態：{broadcast}
-
-https://github.com/c5268326/line-bot-test/actions
-"""
-          msg = MIMEText(body, "plain", "utf-8")
-          msg["Subject"] = f"✅ 業績更新完成 {now}"
-          msg["From"] = user
-          msg["To"] = "c5268326@gmail.com"
-
-          with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
-              smtp.login(user, password)
-              smtp.send_message(msg)
-          print("✅ 通知信已寄出")
-          EOF
+        run: python send_notify.py
