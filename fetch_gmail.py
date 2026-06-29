@@ -35,109 +35,124 @@ ALL_DEPTS = [d for depts in DEPARTMENTS.values() for d in depts]
 ALL_NAMES = set(REGIONS) | set(ALL_DEPTS)
 
 
-def get_latest_excel():
-    """連線 Gmail IMAP，找最新一封含 xlsx 附件的信"""
-    mail = imaplib.IMAP4_SSL("imap.gmail.com")
-    mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
-    mail.select("inbox")
-
+def _get_mail_ids(mail):
+    """搜尋指定寄件者信件，找不到則搜全部"""
     SENDERS = [
         "Jessica-YC.Lu@nanshan.com.tw",
         "c5268326@gmail.com",
     ]
-
-    # 先嘗試指定寄件者搜尋
     _, data = mail.search(None, f'(OR FROM "{SENDERS[0]}" FROM "{SENDERS[1]}")')
     mail_ids = data[0].split()
-    print(f"指定寄件者搜尋結果：{len(mail_ids)} 封")
-
-    # 若找不到，改搜尋全部信件
     if not mail_ids:
-        print("改為搜尋全部信件...")
         _, data = mail.search(None, "ALL")
         mail_ids = data[0].split()
-        print(f"全部信件數量：{len(mail_ids)} 封")
+    return mail_ids
 
-    # 從最新往舊找，找到第一封含 xlsx 或 xls 的信
+
+def _decode_filename(raw_filename):
+    decoded_parts = decode_header(raw_filename)
+    filename = ""
+    for part_bytes, charset in decoded_parts:
+        if isinstance(part_bytes, bytes):
+            filename += part_bytes.decode(charset or "utf-8", errors="replace")
+        else:
+            filename += part_bytes
+    return filename
+
+
+def get_latest_excels():
+    """連線 Gmail IMAP，分別找最新的月報表（49欄）和日報表（7欄）"""
+    mail = imaplib.IMAP4_SSL("imap.gmail.com")
+    mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
+    mail.select("inbox")
+
+    mail_ids = _get_mail_ids(mail)
+    print(f"搜尋到 {len(mail_ids)} 封信")
+
+    monthly_file = None
+    monthly_name = None
+    today_file = None
+    today_name = None
+
     for mail_id in reversed(mail_ids):
+        if monthly_file and today_file:
+            break
         _, msg_data = mail.fetch(mail_id, "(RFC822)")
         msg = email.message_from_bytes(msg_data[0][1])
         sender = msg.get("From", "")
-        subject = msg.get("Subject", "")
 
-        has_attachment = False
         for part in msg.walk():
             raw_filename = part.get_filename()
-            if raw_filename:
-                # 解碼 MIME 編碼的檔名（如 =?UTF-8?B?...?=）
-                decoded_parts = decode_header(raw_filename)
-                filename = ""
-                for part_bytes, charset in decoded_parts:
-                    if isinstance(part_bytes, bytes):
-                        filename += part_bytes.decode(charset or "utf-8", errors="replace")
-                    else:
-                        filename += part_bytes
-                print(f"信件寄件者：{sender}，附件：{filename}")
-                if filename.endswith(".xlsx") or filename.endswith(".xls"):
-                    print(f"找到目標附件：{filename}")
-                    file_bytes = part.get_payload(decode=True)
-                    mail.logout()
-                    return io.BytesIO(file_bytes), filename
+            if not raw_filename:
+                continue
+            filename = _decode_filename(raw_filename)
+            if not (filename.endswith(".xlsx") or filename.endswith(".xls")):
+                continue
+
+            file_bytes = part.get_payload(decode=True)
+            print(f"附件：{filename}（{sender}）")
+
+            try:
+                wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+                ncols = wb.worksheets[0].max_column
+            except Exception:
+                ncols = 0
+
+            if ncols >= 40 and monthly_file is None:
+                monthly_file = io.BytesIO(file_bytes)
+                monthly_name = filename
+                print(f"✅ 月報表：{filename}（{ncols}欄）")
+            elif ncols <= 10 and today_file is None:
+                today_file = io.BytesIO(file_bytes)
+                today_name = filename
+                print(f"✅ 日報表：{filename}（{ncols}欄）")
 
     mail.logout()
-    return None, None
+    return (monthly_file, monthly_name), (today_file, today_name)
 
 
-def parse_xls(file_bytes):
-    """解析舊版 .xls 格式"""
-    wb = xlrd.open_workbook(file_contents=file_bytes.read())
-    ws = wb.sheet_by_index(0)
-    results = {}
-    for row_idx in range(1, ws.nrows):
-        row = ws.row_values(row_idx)
-        region = str(row[0]).strip() if row[0] else ""
-        if region in REGIONS:
-            results[region] = {
-                "實收保費": str(row[1]) if row[1] != "" else "－",
-                "實收達成率": str(row[2]) if row[2] != "" else "－",
-                "A&H保費": str(row[3]) if len(row) > 3 and row[3] != "" else "－",
-                "A&H達成率": str(row[4]) if len(row) > 4 and row[4] != "" else "－",
-                "RP保費": str(row[5]) if len(row) > 5 and row[5] != "" else "－",
-                "RP達成率": str(row[6]) if len(row) > 6 and row[6] != "" else "－",
-            }
-    return results
-
-
-def parse_excel(file_bytes):
+def parse_today_excel(file_bytes):
     """
-    解析 Excel 取得各地區業績數據
-    格式：
-      A欄 = 地區名稱
-      B欄 = 實收保費
-      C欄 = 實收達成率
-      D欄 = A&H保費
-      E欄 = A&H達成率
-      F欄 = RP保費
-      G欄 = RP達成率
+    解析日報表（7欄格式）：
+      A欄 = 地區/業展處, B=實收保費, C=實收達成率, D=A&H保費, E=A&H達成率, F=RP保費, G=RP達成率
+      row 0 = 標題, row 1 起為資料
+      地區名稱使用 REGION_NAME_MAP 對應，業展處名稱有前導空白需 strip
     """
     wb = openpyxl.load_workbook(file_bytes, data_only=True)
-    ws = wb.active
+    ws = wb.worksheets[0]
+    all_rows = list(ws.iter_rows(min_row=2, values_only=True))
 
-    results = {}
-    for row in ws.iter_rows(min_row=2, values_only=True):
+    # 解析報表時間（從檔案修改時間或當下時間）
+    TW = timezone(timedelta(hours=8))
+    report_time = datetime.now(TW).strftime("%Y/%m/%d %H:%M")
+
+    today_regions = {}
+    today_depts = {}
+
+    for row in all_rows:
         if not row[0]:
             continue
-        region = str(row[0]).strip()
-        if region in REGIONS:
-            results[region] = {
-                "實收保費": str(row[1]) if row[1] is not None else "－",
-                "實收達成率": str(row[2]) if row[2] is not None else "－",
-                "A&H保費": str(row[3]) if len(row) > 3 and row[3] is not None else "－",
-                "A&H達成率": str(row[4]) if len(row) > 4 and row[4] is not None else "－",
-                "RP保費": str(row[5]) if len(row) > 5 and row[5] is not None else "－",
-                "RP達成率": str(row[6]) if len(row) > 6 and row[6] is not None else "－",
-            }
-    return results
+        raw = str(row[0]).strip()
+        sys_name = REGION_NAME_MAP.get(raw)
+
+        def v(i):
+            val = row[i] if len(row) > i else None
+            return str(val) if val not in (None, "") else "－"
+
+        vals = {"實收保費": v(1), "實收達成率": v(2), "A&H保費": v(3), "A&H達成率": v(4), "RP保費": v(5), "RP達成率": v(6)}
+
+        if sys_name:
+            today_regions[sys_name] = vals
+        elif raw in REGIONS:
+            today_regions[raw] = vals
+        else:
+            for region, depts in DEPARTMENTS.items():
+                if raw in depts:
+                    today_depts.setdefault(region, {})[raw] = vals
+                    break
+
+    print(f"✅ 日報表：地區 {len(today_regions)} 筆，業展處 {sum(len(v) for v in today_depts.values())} 筆")
+    return today_regions, today_depts, report_time
 
 
 # 新格式：Excel 地區名稱 → 系統地區名稱
@@ -220,57 +235,66 @@ def _parse_new_format(all_rows):
     return monthly, today, report_time
 
 
+def _split_monthly(flat_monthly):
+    """將 _parse_new_format 回傳的 flat dict 拆分為 regions 和 depts"""
+    regions = {}
+    depts = {}
+    for name, vals in flat_monthly.items():
+        if name in REGIONS:
+            regions[name] = vals
+        else:
+            for region, dept_list in DEPARTMENTS.items():
+                if name in dept_list:
+                    depts.setdefault(region, {})[name] = vals
+                    break
+    return regions, depts
+
+
 def parse_xls(file_bytes):
     wb = xlrd.open_workbook(file_contents=file_bytes.read())
     all_rows = [wb.sheet_by_index(0).row_values(i) for i in range(wb.sheet_by_index(0).nrows)]
-    return _parse_new_format(all_rows)
+    flat, _, report_time = _parse_new_format(all_rows)
+    regions, depts = _split_monthly(flat)
+    return regions, depts, report_time
 
 
 def parse_excel(file_bytes):
     wb = openpyxl.load_workbook(file_bytes, data_only=True)
     all_rows = list(wb.worksheets[0].iter_rows(values_only=True))
     print(f"工作表：{wb.worksheets[0].title}，共 {len(all_rows)} 列")
-    return _parse_new_format(all_rows)
+    flat, _, report_time = _parse_new_format(all_rows)
+    regions, depts = _split_monthly(flat)
+    return regions, depts, report_time
 
 
-def update_performance(monthly, today, report_time=None):
+def update_performance(monthly=None, monthly_depts=None, today_regions=None, today_depts=None, report_time=None):
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     if "departments" not in data:
         data["departments"] = {r: {} for r in DEPARTMENTS}
 
-    for name, values in monthly.items():
-        if name in REGIONS:
+    # 更新本月地區
+    if monthly:
+        for name, values in monthly.items():
             data["regions"][name] = values
-            print(f"✅ 本月更新 {name}")
-        else:
-            for region, depts in DEPARTMENTS.items():
-                if name in depts:
-                    data["departments"].setdefault(region, {})[name] = values
-                    print(f"✅ 本月更新 {name}")
-                    break
+            print(f"✅ 本月地區更新 {name}")
 
-    if today:
-        # 更新前保留昨日資料
+    # 更新本月業展處
+    if monthly_depts:
+        for region, depts in monthly_depts.items():
+            for dept, values in depts.items():
+                data["departments"].setdefault(region, {})[dept] = values
+                print(f"✅ 本月業展處更新 {dept}")
+
+    # 更新今日（保留昨日）
+    if today_regions or today_depts:
         if data.get("today"):
             data["yesterday"] = data["today"]
         if data.get("today_departments"):
             data["yesterday_departments"] = data["today_departments"]
-        if "today" not in data:
-            data["today"] = {}
-        if "today_departments" not in data:
-            data["today_departments"] = {r: {} for r in DEPARTMENTS}
-        for name, values in today.items():
-            if name in REGIONS:
-                data["today"][name] = values
-                print(f"✅ 今日更新 {name}")
-            else:
-                for region, depts in DEPARTMENTS.items():
-                    if name in depts:
-                        data["today_departments"].setdefault(region, {})[name] = values
-                        print(f"✅ 今日更新 {name}")
-                        break
+        data["today"] = today_regions or {}
+        data["today_departments"] = today_depts or {r: {} for r in DEPARTMENTS}
 
     if report_time:
         data["updated_at"] = report_time
@@ -399,19 +423,41 @@ def main():
         print("❌ 未設定 GMAIL_APP_PASSWORD 環境變數")
         return
 
-    file_bytes, filename = get_latest_excel()
-    if file_bytes:
-        if filename.endswith(".xls"):
-            monthly, today, report_time = parse_xls(file_bytes)
-        else:
-            monthly, today, report_time = parse_excel(file_bytes)
-        if monthly:
-            update_performance(monthly, today, report_time)
-            broadcast_performance()
-        else:
-            print("⚠️ Excel 內找不到對應地區資料，請確認欄位格式")
+    (monthly_file, monthly_name), (today_file, today_name) = get_latest_excels()
+
+    monthly_regions = {}
+    monthly_depts = {}
+    report_time = None
+
+    if monthly_file:
+        monthly_regions, monthly_depts, report_time = parse_excel(monthly_file)
     else:
-        print("⚠️ 收件匣找不到含 xlsx 附件的信件")
+        print("⚠️ 找不到月報表（49欄格式）")
+
+    today_regions = {}
+    today_depts = {}
+    today_time = None
+
+    if today_file:
+        today_regions, today_depts, today_time = parse_today_excel(today_file)
+    else:
+        print("⚠️ 找不到日報表（7欄格式）")
+
+    if not monthly_regions and not today_regions:
+        print("⚠️ 兩份報表皆無資料")
+        return
+
+    # 以月報表時間為主，日報表時間為輔
+    final_time = report_time or today_time
+
+    update_performance(
+        monthly=monthly_regions,
+        monthly_depts=monthly_depts,
+        today_regions=today_regions,
+        today_depts=today_depts,
+        report_time=final_time,
+    )
+    broadcast_performance()
 
 
 if __name__ == "__main__":
