@@ -37,3 +37,47 @@ jobs:
           git add data/performance.json
           git diff --cached --quiet || git commit -m "自動更新業績資料 $(TZ='Asia/Taipei' date '+%Y/%m/%d %H:%M')"
           git push
+
+      - name: 寄送執行完成通知
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: |
+          python3 - <<'EOF'
+          import smtplib, os, json
+          from email.mime.text import MIMEText
+          from datetime import datetime, timezone, timedelta
+
+          user = os.environ["GMAIL_USER"]
+          password = os.environ["GMAIL_APP_PASSWORD"]
+
+          TW = timezone(timedelta(hours=8))
+          now = datetime.now(TW).strftime("%Y/%m/%d %H:%M")
+
+          try:
+              with open("data/performance.json", encoding="utf-8") as f:
+                  data = json.load(f)
+              updated = data.get("updated_at", "－")
+              broadcast = "✅ 已廣播" if data.get("last_broadcast_date") == datetime.now(TW).strftime("%Y/%m/%d") else "⏭️ 略過廣播"
+          except Exception:
+              updated = "－"
+              broadcast = "不明"
+
+          body = f"""南山業績 LINE Bot 執行完成
+
+執行時間：{now}
+資料時間：{updated}
+廣播狀態：{broadcast}
+
+https://github.com/c5268326/line-bot-test/actions
+"""
+          msg = MIMEText(body, "plain", "utf-8")
+          msg["Subject"] = f"✅ 業績更新完成 {now}"
+          msg["From"] = user
+          msg["To"] = user
+
+          with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+              smtp.login(user, password)
+              smtp.send_message(msg)
+          print("✅ 通知信已寄出")
+          EOF
