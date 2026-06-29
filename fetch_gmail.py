@@ -293,6 +293,36 @@ def parse_excel(file_bytes):
     return regions, depts, report_time
 
 
+def _combine_vals(monthly_vals, today_vals):
+    """合併月報（月初到昨日17:00）+ 日報（昨日17:00到現在）的金額，重新計算達成率"""
+    def to_float(v):
+        try:
+            return float(str(v).replace(",", ""))
+        except (ValueError, TypeError):
+            return None
+
+    combined = {}
+    for amt_key, rate_key in [("實收保費", "實收達成率"), ("A&H保費", "A&H達成率"), ("RP保費", "RP達成率")]:
+        m_amt = to_float(monthly_vals.get(amt_key))
+        d_amt = to_float(today_vals.get(amt_key))
+        m_rate = parse_rate_float(monthly_vals.get(rate_key))
+
+        if m_amt is not None and d_amt is not None:
+            combined_amt = m_amt + d_amt
+            combined[amt_key] = str(combined_amt)
+            # 用月報達成率反推目標，計算合併達成率
+            if m_rate and m_rate > 0 and m_amt > 0:
+                target = m_amt / m_rate
+                combined[rate_key] = f"{combined_amt / target * 100:.1f}%"
+            else:
+                combined[rate_key] = monthly_vals.get(rate_key, "－")
+        else:
+            combined[amt_key] = monthly_vals.get(amt_key, "－")
+            combined[rate_key] = monthly_vals.get(rate_key, "－")
+
+    return combined
+
+
 def update_performance(monthly=None, monthly_depts=None, today_regions=None, today_depts=None, report_time=None):
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -300,18 +330,27 @@ def update_performance(monthly=None, monthly_depts=None, today_regions=None, tod
     if "departments" not in data:
         data["departments"] = {r: {} for r in DEPARTMENTS}
 
-    # 更新本月地區
+    # 更新本月地區（月報 + 日報合併）
     if monthly:
         for name, values in monthly.items():
-            data["regions"][name] = values
-            print(f"✅ 本月地區更新 {name}")
+            if today_regions and name in today_regions:
+                data["regions"][name] = _combine_vals(values, today_regions[name])
+                print(f"✅ 本月地區合併 {name}")
+            else:
+                data["regions"][name] = values
+                print(f"✅ 本月地區更新 {name}")
 
-    # 更新本月業展處
+    # 更新本月業展處（月報 + 日報合併）
     if monthly_depts:
         for region, depts in monthly_depts.items():
             for dept, values in depts.items():
-                data["departments"].setdefault(region, {})[dept] = values
-                print(f"✅ 本月業展處更新 {dept}")
+                today_dept_vals = (today_depts or {}).get(region, {}).get(dept)
+                if today_dept_vals:
+                    data["departments"].setdefault(region, {})[dept] = _combine_vals(values, today_dept_vals)
+                    print(f"✅ 本月業展處合併 {dept}")
+                else:
+                    data["departments"].setdefault(region, {})[dept] = values
+                    print(f"✅ 本月業展處更新 {dept}")
 
     # 更新今日（保留昨日）
     if today_regions or today_depts:
