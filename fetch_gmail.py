@@ -105,20 +105,28 @@ def get_latest_excels():
     return (monthly_file, monthly_name), (today_file, today_name)
 
 
-def parse_today_excel(file_bytes):
+def _parse_time_from_filename(filename):
+    """從檔名解析時間，如 _20260629_2127.xlsx → 2026/06/29 21:27"""
+    m = re.search(r'(\d{8})_(\d{4})', filename)
+    if m:
+        d, t = m.group(1), m.group(2)
+        return f"{d[:4]}/{d[4:6]}/{d[6:8]} {t[:2]}:{t[2:]}"
+    return None
+
+
+def parse_today_excel(file_bytes, filename=""):
     """
     解析日報表（7欄格式）：
       A欄 = 地區/業展處, B=實收保費, C=實收達成率, D=A&H保費, E=A&H達成率, F=RP保費, G=RP達成率
       row 0 = 標題, row 1 起為資料
-      地區名稱使用 REGION_NAME_MAP 對應，業展處名稱有前導空白需 strip
     """
     wb = openpyxl.load_workbook(file_bytes, data_only=True)
     ws = wb.worksheets[0]
     all_rows = list(ws.iter_rows(min_row=2, values_only=True))
 
-    # 解析報表時間（從檔案修改時間或當下時間）
     TW = timezone(timedelta(hours=8))
-    report_time = datetime.now(TW).strftime("%Y/%m/%d %H:%M")
+    report_time = _parse_time_from_filename(filename) or datetime.now(TW).strftime("%Y/%m/%d %H:%M")
+    print(f"📅 日報表時間：{report_time}")
 
     today_regions = {}
     today_depts = {}
@@ -433,7 +441,7 @@ def main():
     today_time = None
 
     if today_file:
-        today_regions, today_depts, today_time = parse_today_excel(today_file)
+        today_regions, today_depts, today_time = parse_today_excel(today_file, today_name or "")
     else:
         print("⚠️ 找不到日報表（7欄格式）")
 
