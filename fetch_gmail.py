@@ -374,7 +374,8 @@ def broadcast_performance():
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    regions = data.get("regions", {})
+    # 本日廣播優先用日報表資料（today），無則退回月報表
+    regions = data.get("today") or data.get("regions", {})
     updated = data.get("updated_at", "－")
     national = regions.get("全國", {})
 
