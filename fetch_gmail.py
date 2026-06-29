@@ -106,11 +106,11 @@ def get_latest_excels():
 
 
 def _parse_time_from_filename(filename):
-    """從檔名解析時間，如 _20260629_2127.xlsx → 2026/06/29 21:27"""
+    """從檔名解析時間（取整點），如 _20260629_2127.xlsx → 2026/06/29 21:00"""
     m = re.search(r'(\d{8})_(\d{4})', filename)
     if m:
         d, t = m.group(1), m.group(2)
-        return f"{d[:4]}/{d[4:6]}/{d[6:8]} {t[:2]}:{t[2:]}"
+        return f"{d[:4]}/{d[4:6]}/{d[6:8]} {t[:2]}:00"
     return None
 
 
