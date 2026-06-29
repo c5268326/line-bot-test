@@ -60,8 +60,36 @@ def _decode_filename(raw_filename):
     return filename
 
 
+def _decode_subject(msg):
+    """解碼信件主旨"""
+    raw = msg.get("Subject", "")
+    parts = decode_header(raw)
+    subject = ""
+    for part_bytes, charset in parts:
+        if isinstance(part_bytes, bytes):
+            subject += part_bytes.decode(charset or "utf-8", errors="replace")
+        else:
+            subject += part_bytes
+    return subject
+
+
+def _get_excel_attachment(msg):
+    """取得信件中第一個 Excel 附件的 (BytesIO, filename)，無則回傳 (None, None)"""
+    for part in msg.walk():
+        raw_filename = part.get_filename()
+        if not raw_filename:
+            continue
+        filename = _decode_filename(raw_filename)
+        if filename.endswith(".xlsx") or filename.endswith(".xls"):
+            return io.BytesIO(part.get_payload(decode=True)), filename
+    return None, None
+
+
 def get_latest_excels():
-    """連線 Gmail IMAP，分別找最新的月報表（49欄）和日報表（7欄）"""
+    """連線 Gmail IMAP，依信件主旨分別找最新的月報表和日報表
+    - 日報表：主旨含「速報」
+    - 月報表：主旨含「每日業績最終報表」
+    """
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
     mail.select("inbox")
@@ -79,27 +107,23 @@ def get_latest_excels():
             break
         _, msg_data = mail.fetch(mail_id, "(RFC822)")
         msg = email.message_from_bytes(msg_data[0][1])
+        subject = _decode_subject(msg)
         sender = msg.get("From", "")
+        print(f"信件：{subject}（{sender}）")
 
-        for part in msg.walk():
-            raw_filename = part.get_filename()
-            if not raw_filename:
-                continue
-            filename = _decode_filename(raw_filename)
-            if not (filename.endswith(".xlsx") or filename.endswith(".xls")):
-                continue
-
-            file_bytes = part.get_payload(decode=True)
-            print(f"附件：{filename}（{sender}）")
-
-            if "業績達成率" in filename and today_file is None:
-                today_file = io.BytesIO(file_bytes)
+        if "速報" in subject and today_file is None:
+            file_bytes, filename = _get_excel_attachment(msg)
+            if file_bytes:
+                today_file = file_bytes
                 today_name = filename
-                print(f"✅ 日報表：{filename}")
-            elif "業績達成率" not in filename and monthly_file is None:
-                monthly_file = io.BytesIO(file_bytes)
+                print(f"✅ 日報表：{filename}（主旨：{subject}）")
+
+        elif "每日業績最終報表" in subject and monthly_file is None:
+            file_bytes, filename = _get_excel_attachment(msg)
+            if file_bytes:
+                monthly_file = file_bytes
                 monthly_name = filename
-                print(f"✅ 月報表：{filename}")
+                print(f"✅ 月報表：{filename}（主旨：{subject}）")
 
     mail.logout()
     return (monthly_file, monthly_name), (today_file, today_name)
