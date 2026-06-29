@@ -88,7 +88,7 @@ def _get_excel_attachment(msg):
 def get_latest_excels():
     """連線 Gmail IMAP，依信件主旨分別找最新的月報表和日報表
     - 日報表：主旨含「速報」
-    - 月報表：主旨含「每日業績最終報表」
+    - 月報表：主旨含「每日業績追蹤報表」
     """
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
@@ -118,7 +118,7 @@ def get_latest_excels():
                 today_name = filename
                 print(f"✅ 日報表：{filename}（主旨：{subject}）")
 
-        elif "每日業績最終報表" in subject and monthly_file is None:
+        elif "每日業績追蹤報表" in subject and monthly_file is None:
             file_bytes, filename = _get_excel_attachment(msg)
             if file_bytes:
                 monthly_file = file_bytes
