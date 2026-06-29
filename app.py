@@ -56,7 +56,6 @@ HELP_TEXT = (
     "可用指令：\n"
     "・台北一區 / 桃竹苗區 / 中部地區 / 南部地區 / 台北二區\n"
     "　→ 地區+業展處業績卡片\n"
-    "・最新業績 → 查詢各地區業績數字\n"
     "・本月業績速報 → 業績卡片總覽\n"
     "・本月業展處速報 → 所有業展處本月業績卡片（含全國排名）\n"
     "・本日業展處速報 → 所有業展處本日業績卡片（含全國排名）\n"
@@ -765,9 +764,7 @@ def webhook():
 def handle_message(event):
     text = event.message.text.strip()
 
-    if text == "最新業績":
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=build_performance_text()))
-    elif text == "各地區":
+    if text == "各地區":
         line_bot_api.reply_message(event.reply_token, build_region_quickreply())
     elif text == "群組ID":
         source = event.source
