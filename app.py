@@ -56,7 +56,6 @@ HELP_TEXT = (
     "可用指令：\n"
     "・台北一區 / 桃竹苗區 / 中部地區 / 南部地區 / 台北二區\n"
     "　→ 地區+業展處業績卡片\n"
-    "・全國 → 全國報表圖片\n"
     "・最新業績 → 查詢各地區業績數字\n"
     "・本月業績速報 → 業績卡片總覽\n"
     "・本月業展處速報 → 所有業展處本月業績卡片（含全國排名）\n"
@@ -64,8 +63,6 @@ HELP_TEXT = (
     "・三標排行榜 → 選擇本月或本日達成率地區排名\n"
     "・業展處三標排行榜 → 選擇本月或本日業展處三標排行榜（三項各一張）\n"
     "・本日業績速報 → 本日新增保費速報\n"
-    "・達標 → 業展處達標狀況 + 動態慶祝\n"
-    "・趨勢比較 → 業展處今日 vs 昨日全國排名升降（▲▼）\n"
     "・各地區 → 點選地區快速查詢"
 )
 
@@ -772,17 +769,6 @@ def handle_message(event):
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text=build_performance_text()))
     elif text == "各地區":
         line_bot_api.reply_message(event.reply_token, build_region_quickreply())
-    elif text == "達標":
-        flex_msg = build_achieved_flex()
-        # LINE 官方動態貼圖（Lottie 渲染）：package 11537 Brown & Friends 慶祝動態
-        sticker = StickerSendMessage(package_id="11537", sticker_id="52002740")
-        line_bot_api.reply_message(event.reply_token, [sticker, flex_msg])
-    elif text == "趨勢比較":
-        msg = build_trend_flex()
-        if msg:
-            line_bot_api.reply_message(event.reply_token, msg)
-        else:
-            line_bot_api.reply_message(event.reply_token, TextSendMessage(text="⚠️ 尚無今日資料，請等待今日速報更新後再查詢"))
     elif text == "群組ID":
         source = event.source
         gid = getattr(source, "group_id", None) or getattr(source, "room_id", None) or source.user_id
@@ -831,7 +817,6 @@ def handle_message(event):
         b2 = build_ranking_bubble("today", "📊 本日三標排行榜")
         qr = QuickReply(items=[
             QuickReplyButton(action=MessageAction(label="業展處三標排行榜", text="業展處三標排行榜")),
-            QuickReplyButton(action=MessageAction(label="達標", text="達標")),
         ])
         line_bot_api.reply_message(
             event.reply_token,
