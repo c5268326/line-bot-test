@@ -725,8 +725,8 @@ def build_performance_text():
     for region, values in data["regions"].items():
         lines.append(
             f"【{region}】\n"
-            f"實收保費：{fmt_amount(values['實收保費'])}\n"
-            f"實收達成率：{fmt_rate(values['實收達成率'])}\n"
+            f"實收保費：{fmt_amount(values.get('實收保費', '－'))}\n"
+            f"實收達成率：{fmt_rate(values.get('實收達成率', '－'))}\n"
             f"A&H保費：{fmt_amount(values.get('A&H保費', '－'))}\n"
             f"A&H達成率：{fmt_rate(values.get('A&H達成率', '－'))}\n"
             f"RP保費：{fmt_amount(values.get('RP保費', '－'))}\n"
@@ -768,7 +768,9 @@ def webhook():
 def handle_message(event):
     text = event.message.text.strip()
 
-    if text == "各地區":
+    if text == "最新業績":
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=build_performance_text()))
+    elif text == "各地區":
         line_bot_api.reply_message(event.reply_token, build_region_quickreply())
     elif text == "達標":
         flex_msg = build_achieved_flex()
