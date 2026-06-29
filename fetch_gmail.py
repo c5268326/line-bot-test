@@ -92,20 +92,14 @@ def get_latest_excels():
             file_bytes = part.get_payload(decode=True)
             print(f"附件：{filename}（{sender}）")
 
-            try:
-                wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
-                ncols = wb.worksheets[0].max_column
-            except Exception:
-                ncols = 0
-
-            if ncols >= 40 and monthly_file is None:
-                monthly_file = io.BytesIO(file_bytes)
-                monthly_name = filename
-                print(f"✅ 月報表：{filename}（{ncols}欄）")
-            elif ncols <= 10 and today_file is None:
+            if "業績達成率" in filename and today_file is None:
                 today_file = io.BytesIO(file_bytes)
                 today_name = filename
-                print(f"✅ 日報表：{filename}（{ncols}欄）")
+                print(f"✅ 日報表：{filename}")
+            elif "業績達成率" not in filename and monthly_file is None:
+                monthly_file = io.BytesIO(file_bytes)
+                monthly_name = filename
+                print(f"✅ 月報表：{filename}")
 
     mail.logout()
     return (monthly_file, monthly_name), (today_file, today_name)
