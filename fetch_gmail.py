@@ -480,6 +480,13 @@ def broadcast_performance():
     )
     if resp.status_code == 200:
         print("✅ 廣播推播成功")
+        # 記錄今日已廣播
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            d = json.load(f)
+        TW = timezone(timedelta(hours=8))
+        d["last_broadcast_date"] = datetime.now(TW).strftime("%Y/%m/%d")
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
     else:
         print(f"⚠️ 廣播推播失敗：{resp.status_code} {resp.text}")
 
@@ -523,7 +530,17 @@ def main():
         today_depts=today_depts,
         report_time=final_time,
     )
-    broadcast_performance()
+
+    # 只在當天第一次更新時廣播
+    TW = timezone(timedelta(hours=8))
+    today_str = datetime.now(TW).strftime("%Y/%m/%d")
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        d = json.load(f)
+    last_broadcast = d.get("last_broadcast_date", "")
+    if last_broadcast != today_str:
+        broadcast_performance()
+    else:
+        print(f"⏭️ 今日已廣播過（{last_broadcast}），略過推播")
 
 
 if __name__ == "__main__":
