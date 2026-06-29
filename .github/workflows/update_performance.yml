@@ -74,7 +74,7 @@ https://github.com/c5268326/line-bot-test/actions
           msg = MIMEText(body, "plain", "utf-8")
           msg["Subject"] = f"✅ 業績更新完成 {now}"
           msg["From"] = user
-          msg["To"] = user
+          msg["To"] = "c5268326@gmail.com"
 
           with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
               smtp.login(user, password)
