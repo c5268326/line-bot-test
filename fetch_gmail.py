@@ -473,8 +473,8 @@ def main():
         print("⚠️ 兩份報表皆無資料")
         return
 
-    # 以月報表時間為主，日報表時間為輔
-    final_time = report_time or today_time
+    # 以日報表時間為主，月報表時間為輔
+    final_time = today_time or report_time
 
     update_performance(
         monthly=monthly_regions,
