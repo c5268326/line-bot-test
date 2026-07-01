@@ -330,7 +330,7 @@ def update_performance(monthly=None, monthly_depts=None, today_regions=None, tod
     if "departments" not in data:
         data["departments"] = {r: {} for r in DEPARTMENTS}
 
-    # 更新本月地區（月報 + 日報合併）
+    # 更新本月地區（月報 + 日報合併；月初無月報時直接用日報）
     if monthly:
         for name, values in monthly.items():
             if today_regions and name in today_regions:
@@ -339,8 +339,13 @@ def update_performance(monthly=None, monthly_depts=None, today_regions=None, tod
             else:
                 data["regions"][name] = values
                 print(f"✅ 本月地區更新 {name}")
+    elif today_regions:
+        # 月初尚無月報表，本月資料直接等於日報表（本月累積 = 今日）
+        for name, values in today_regions.items():
+            data["regions"][name] = values
+            print(f"✅ 本月地區（月初無月報，使用日報）{name}")
 
-    # 更新本月業展處（月報 + 日報合併）
+    # 更新本月業展處（月報 + 日報合併；月初無月報時直接用日報）
     if monthly_depts:
         for region, depts in monthly_depts.items():
             for dept, values in depts.items():
@@ -351,6 +356,11 @@ def update_performance(monthly=None, monthly_depts=None, today_regions=None, tod
                 else:
                     data["departments"].setdefault(region, {})[dept] = values
                     print(f"✅ 本月業展處更新 {dept}")
+    elif today_depts:
+        for region, depts in today_depts.items():
+            for dept, values in depts.items():
+                data["departments"].setdefault(region, {})[dept] = values
+                print(f"✅ 本月業展處（月初無月報，使用日報）{dept}")
 
     # 更新今日（保留昨日）
     if today_regions or today_depts:
