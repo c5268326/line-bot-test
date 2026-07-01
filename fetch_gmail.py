@@ -514,6 +514,15 @@ def main():
 
     if monthly_file:
         monthly_regions, monthly_depts, report_time = parse_excel(monthly_file)
+        # 若月報表是上個月的資料（例如每月1號收到的是上月月報），不列入本月計算
+        if report_time:
+            TW = timezone(timedelta(hours=8))
+            report_month = report_time[:7]  # "2026/06"
+            current_month = datetime.now(TW).strftime("%Y/%m")
+            if report_month != current_month:
+                print(f"⚠️ 月報表為上月資料（{report_month}），本月改用日報表")
+                monthly_regions = {}
+                monthly_depts = {}
     else:
         print("⚠️ 找不到月報表（49欄格式）")
 
