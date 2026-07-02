@@ -35,17 +35,22 @@ ALL_DEPTS = [d for depts in DEPARTMENTS.values() for d in depts]
 ALL_NAMES = set(REGIONS) | set(ALL_DEPTS)
 
 
-def _get_mail_ids(mail):
-    """搜尋指定寄件者信件，找不到則搜全部"""
+def _get_mail_ids(mail, since_days=7):
+    """搜尋最近 N 天內指定寄件者的信件"""
     SENDERS = [
         "Jessica-YC.Lu@nanshan.com.tw",
         "c5268326@gmail.com",
     ]
-    _, data = mail.search(None, f'(OR FROM "{SENDERS[0]}" FROM "{SENDERS[1]}")')
+    TW = timezone(timedelta(hours=8))
+    since_date = (datetime.now(TW) - timedelta(days=since_days)).strftime("%d-%b-%Y")
+    criteria = f'(SENTSINCE {since_date} (OR FROM "{SENDERS[0]}" FROM "{SENDERS[1]}"))'
+    _, data = mail.search(None, criteria)
     mail_ids = data[0].split()
     if not mail_ids:
-        _, data = mail.search(None, "ALL")
+        # 找不到就放寬到不限寄件者，只限日期
+        _, data = mail.search(None, f"SENTSINCE {since_date}")
         mail_ids = data[0].split()
+    print(f"搜尋最近 {since_days} 天（since {since_date}），找到 {len(mail_ids)} 封")
     return mail_ids
 
 
