@@ -90,10 +90,19 @@ def _get_excel_attachment(msg):
     return None, None
 
 
+def _get_mail_date(msg):
+    """取得信件發送日期，回傳 datetime（台灣時間）"""
+    from email.utils import parsedate_to_datetime
+    try:
+        return parsedate_to_datetime(msg.get("Date", "")).astimezone(TW)
+    except Exception:
+        return None
+
+
 def get_latest_excels():
     """連線 Gmail IMAP，依信件主旨分別找最新的月報表和日報表
-    - 日報表：主旨含「速報」
-    - 月報表：主旨含「每日業績追蹤報表」
+    - 日報表：主旨含「速報」，且信件必須是本月寄出的
+    - 月報表：主旨含「每日業績追蹤報表」，且信件必須是本月寄出的
     """
     mail = imaplib.IMAP4_SSL("imap.gmail.com")
     mail.login(GMAIL_USER, GMAIL_APP_PASSWORD)
@@ -102,6 +111,7 @@ def get_latest_excels():
     mail_ids = _get_mail_ids(mail)
     print(f"搜尋到 {len(mail_ids)} 封信")
 
+    current_month = datetime.now(TW).strftime("%Y/%m")
     monthly_file = None
     monthly_name = None
     today_file = None
@@ -114,7 +124,14 @@ def get_latest_excels():
         msg = email.message_from_bytes(msg_data[0][1])
         subject = _decode_subject(msg)
         sender = msg.get("From", "")
-        print(f"信件：{subject}（{sender}）")
+        mail_date = _get_mail_date(msg)
+        mail_month = mail_date.strftime("%Y/%m") if mail_date else None
+        print(f"信件：{subject}（{sender}）日期：{mail_date}")
+
+        # 只接受本月寄出的信件
+        if mail_month and mail_month != current_month:
+            print(f"⏭️ 跳過（非本月信件：{mail_month}）")
+            continue
 
         if "速報" in subject and today_file is None:
             file_bytes, filename = _get_excel_attachment(msg)
@@ -520,14 +537,13 @@ def main():
     if monthly_file:
         monthly_regions, monthly_depts, report_time = parse_excel(monthly_file)
         # 若月報表是上個月的資料（例如每月1號收到的是上月月報），不列入本月計算
-        if report_time:
-            TW = timezone(timedelta(hours=8))
-            report_month = report_time[:7]  # "2026/06"
-            current_month = datetime.now(TW).strftime("%Y/%m")
-            if report_month != current_month:
-                print(f"⚠️ 月報表為上月資料（{report_month}），本月改用日報表")
-                monthly_regions = {}
-                monthly_depts = {}
+        # report_time 為 None 時無法判斷，保守起見視為上月資料跳過
+        report_month = report_time[:7] if report_time else None
+        current_month = datetime.now(TW).strftime("%Y/%m")
+        if report_month != current_month:
+            print(f"⚠️ 月報表為上月資料（{report_month}），本月改用日報表")
+            monthly_regions = {}
+            monthly_depts = {}
     else:
         print("⚠️ 找不到月報表（49欄格式）")
 
