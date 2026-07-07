@@ -258,6 +258,11 @@ def _parse_new_format(all_rows):
     monthly = {}
     today = {}
 
+    # 印出第一筆地區列的各欄位，協助確認欄位映射
+    if len(all_rows) > 2 and len(all_rows[2]) > 30:
+        r = all_rows[2]
+        print(f"[DEBUG] row2 cols 8-28: { {i: r[i] for i in range(8, 29) if i < len(r)} }")
+
     # 地區列 rows 2-7（含合計）
     for row in all_rows[2:8]:
         raw = str(row[0]).strip() if row[0] else ""
@@ -306,11 +311,16 @@ def parse_xls(file_bytes):
     return regions, depts, report_time
 
 
-def parse_excel(file_bytes):
+def parse_excel(file_bytes, filename=""):
     wb = openpyxl.load_workbook(file_bytes, data_only=True)
     all_rows = list(wb.worksheets[0].iter_rows(values_only=True))
     print(f"工作表：{wb.worksheets[0].title}，共 {len(all_rows)} 列")
     flat, _, report_time = _parse_new_format(all_rows)
+    # _parse_report_time 讀不到時，從檔名提取日期
+    if not report_time:
+        report_time = _parse_time_from_filename(filename)
+        if report_time:
+            print(f"📅 從檔名解析報表時間：{report_time}")
     regions, depts = _split_monthly(flat)
     return regions, depts, report_time
 
@@ -533,7 +543,7 @@ def main():
     report_time = None
 
     if monthly_file:
-        monthly_regions, monthly_depts, report_time = parse_excel(monthly_file)
+        monthly_regions, monthly_depts, report_time = parse_excel(monthly_file, monthly_name or "")
         # 若月報表是上個月的資料（例如每月1號收到的是上月月報），不列入本月計算
         # report_time 為 None 時無法判斷，保守起見視為上月資料跳過
         report_month = report_time[:7] if report_time else None
