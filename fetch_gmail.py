@@ -41,7 +41,6 @@ def _get_mail_ids(mail, since_days=7):
         "Jessica-YC.Lu@nanshan.com.tw",
         "c5268326@gmail.com",
     ]
-    TW = timezone(timedelta(hours=8))
     since_date = (datetime.now(TW) - timedelta(days=since_days)).strftime("%d-%b-%Y")
     criteria = f'(SENTSINCE {since_date} (OR FROM "{SENDERS[0]}" FROM "{SENDERS[1]}"))'
     _, data = mail.search(None, criteria)
@@ -173,7 +172,6 @@ def parse_today_excel(file_bytes, filename=""):
     ws = wb.worksheets[0]
     all_rows = list(ws.iter_rows(min_row=2, values_only=True))
 
-    TW = timezone(timedelta(hours=8))
     report_time = _parse_time_from_filename(filename) or datetime.now(TW).strftime("%Y/%m/%d %H:%M")
     print(f"📅 日報表時間：{report_time}")
 
@@ -247,7 +245,6 @@ def _parse_report_time(all_rows):
         header = str(all_rows[0][14]) if len(all_rows[0]) > 14 else ""
         m = re.search(r'(\d+)/(\d+)\s+(\d+)點', header)
         if m:
-            TW = timezone(timedelta(hours=8))
             year = datetime.now(TW).year
             month, day, hour = int(m.group(1)), int(m.group(2)), int(m.group(3))
             return f"{year}/{month:02d}/{day:02d} {hour:02d}:00"
@@ -399,7 +396,6 @@ def update_performance(monthly=None, monthly_depts=None, today_regions=None, tod
     if report_time:
         data["updated_at"] = report_time
     else:
-        TW = timezone(timedelta(hours=8))
         data["updated_at"] = datetime.now(TW).strftime("%Y/%m/%d %H:%M")
 
     with open(DATA_FILE, "w", encoding="utf-8") as f:
@@ -518,7 +514,6 @@ def broadcast_performance():
         # 記錄今日已廣播
         with open(DATA_FILE, "r", encoding="utf-8") as f:
             d = json.load(f)
-        TW = timezone(timedelta(hours=8))
         d["last_broadcast_date"] = datetime.now(TW).strftime("%Y/%m/%d")
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(d, f, ensure_ascii=False, indent=2)
@@ -575,7 +570,6 @@ def main():
     )
 
     # 只在當天第一次更新時廣播
-    TW = timezone(timedelta(hours=8))
     today_str = datetime.now(TW).strftime("%Y/%m/%d")
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         d = json.load(f)
