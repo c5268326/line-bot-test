@@ -90,6 +90,9 @@ def _get_excel_attachment(msg):
     return None, None
 
 
+TW = timezone(timedelta(hours=8))
+
+
 def _get_mail_date(msg):
     """取得信件發送日期，回傳 datetime（台灣時間）"""
     from email.utils import parsedate_to_datetime
