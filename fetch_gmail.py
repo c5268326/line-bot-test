@@ -232,11 +232,11 @@ def _extract_new_format(row, today=False):
         return str(val) if val not in (None, "") else "－"
 
     if today:
-        # col 8=當日實收, 9=當日實收率, 10=當日A&H, 11=當日A&H率, 12=當日RP, 13=當日RP率
-        return {"實收保費": v(8), "實收達成率": v(9), "A&H保費": v(10), "A&H達成率": v(11), "RP保費": v(12), "RP達成率": v(13)}
+        # col 10=當日實收業績, 11=當日實收達成率, 12=當日A&H實收, 13=當日A&H達成率, 14=當日RP實收, 15=當日RP達成率
+        return {"實收保費": v(10), "實收達成率": v(11), "A&H保費": v(12), "A&H達成率": v(13), "RP保費": v(14), "RP達成率": v(15)}
     else:
-        # col 17=本月實收, 18=本月實收率, 23=A&H, 24=A&H率, 27=期繳, 28=期繳率
-        return {"實收保費": v(17), "實收達成率": v(18), "A&H保費": v(23), "A&H達成率": v(24), "RP保費": v(27), "RP達成率": v(28)}
+        # col 26=當月累計實收業績, 27=當月實收達成率, 28=當月A&H實收業績, 29=當月A&H達成率(?), 30=當月RP(?), 31=當月RP達成率(?)
+        return {"實收保費": v(26), "實收達成率": v(27), "A&H保費": v(28), "A&H達成率": v(29), "RP保費": v(30), "RP達成率": v(31)}
 
 
 def _parse_report_time(all_rows):
@@ -258,13 +258,13 @@ def _parse_new_format(all_rows):
     monthly = {}
     today = {}
 
-    # 印出第一筆地區列的各欄位，協助確認欄位映射
+    # 印出 header row 欄位，協助確認欄位映射
     if len(all_rows) > 2 and len(all_rows[2]) > 30:
         r = all_rows[2]
-        print(f"[DEBUG] row2 cols 8-28: { {i: r[i] for i in range(8, 29) if i < len(r)} }")
+        print(f"[DEBUG] header cols 8-40: { {i: r[i] for i in range(8, 41) if i < len(r)} }")
 
-    # 地區列 rows 2-7（含合計）
-    for row in all_rows[2:8]:
+    # 地區列：row2=header，rows 3-7=5 業發部，row 8=合計(全國)
+    for row in all_rows[2:10]:
         raw = str(row[0]).strip() if row[0] else ""
         sys_name = REGION_NAME_MAP.get(raw)
         if sys_name:
