@@ -235,8 +235,8 @@ def _extract_new_format(row, today=False):
         # col 10=當日實收業績, 11=當日實收達成率, 12=當日A&H實收, 13=當日A&H達成率, 14=當日RP實收, 15=當日RP達成率
         return {"實收保費": v(10), "實收達成率": v(11), "A&H保費": v(12), "A&H達成率": v(13), "RP保費": v(14), "RP達成率": v(15)}
     else:
-        # col 26=當月累計實收業績, 27=當月實收達成率, 28=當月A&H實收業績, 29=當月A&H達成率(?), 30=當月RP(?), 31=當月RP達成率(?)
-        return {"實收保費": v(26), "實收達成率": v(27), "A&H保費": v(28), "A&H達成率": v(29), "RP保費": v(30), "RP達成率": v(31)}
+        # col 26=當月累計實收業績, 27=當月實收達成率, 28=當月A&H實收業績, 39=A&H實收達成率, RP欄位待確認
+        return {"實收保費": v(26), "實收達成率": v(27), "A&H保費": v(28), "A&H達成率": v(39), "RP保費": v(41), "RP達成率": v(42)}
 
 
 def _parse_report_time(all_rows):
@@ -261,7 +261,7 @@ def _parse_new_format(all_rows):
     # 印出 header row 欄位，協助確認欄位映射
     if len(all_rows) > 2 and len(all_rows[2]) > 30:
         r = all_rows[2]
-        print(f"[DEBUG] header cols 8-40: { {i: r[i] for i in range(8, 41) if i < len(r)} }")
+        print(f"[DEBUG] header cols 38-55: { {i: r[i] for i in range(38, 56) if i < len(r)} }")
 
     # 地區列：row2=header，rows 3-7=5 業發部，row 8=合計(全國)
     for row in all_rows[2:10]:
