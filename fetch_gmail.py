@@ -235,8 +235,8 @@ def _extract_new_format(row, today=False):
         # col 10=當日實收業績, 11=當日實收達成率, 12=當日A&H實收, 13=當日A&H達成率, 14=當日RP實收, 15=當日RP達成率
         return {"實收保費": v(10), "實收達成率": v(11), "A&H保費": v(12), "A&H達成率": v(13), "RP保費": v(14), "RP達成率": v(15)}
     else:
-        # col 26=當月累計實收業績, 27=當月實收達成率, 28=當月A&H實收業績, 39=A&H實收達成率, RP欄位待確認
-        return {"實收保費": v(26), "實收達成率": v(27), "A&H保費": v(28), "A&H達成率": v(39), "RP保費": v(41), "RP達成率": v(42)}
+        # col 26=當月累計實收業績, 27=當月實收達成率, 38=A&H實收, 39=A&H實收達成率, 47=本月累計RP加權保費, 48=RP達成率
+        return {"實收保費": v(26), "實收達成率": v(27), "A&H保費": v(38), "A&H達成率": v(39), "RP保費": v(47), "RP達成率": v(48)}
 
 
 def _parse_report_time(all_rows):
@@ -257,11 +257,6 @@ def _parse_new_format(all_rows):
     """解析新版單工作表格式（業發部_業展處_三時段整點）"""
     monthly = {}
     today = {}
-
-    # 印出 header row 欄位，協助確認 RP 欄位
-    if len(all_rows) > 2 and len(all_rows[2]) > 38:
-        r = all_rows[2]
-        print(f"[DEBUG] header cols 38-55: { {i: r[i] for i in range(38, 56) if i < len(r)} }")
 
     # 逐列掃描：用 col A 名稱比對地區和業展處（不依賴固定行號）
     for row in all_rows:
