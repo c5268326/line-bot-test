@@ -235,8 +235,9 @@ def _extract_new_format(row, today=False):
         # col 10=當日實收業績, 11=當日實收達成率, 12=當日A&H實收, 13=當日A&H達成率, 14=當日RP實收, 15=當日RP達成率
         return {"實收保費": v(10), "實收達成率": v(11), "A&H保費": v(12), "A&H達成率": v(13), "RP保費": v(14), "RP達成率": v(15)}
     else:
-        # col 26=當月累計實收業績, 27=當月實收達成率, 38=A&H實收, 39=A&H實收達成率, 47=本月累計RP加權保費, 48=RP達成率
-        return {"實收保費": v(26), "實收達成率": v(27), "A&H保費": v(38), "A&H達成率": v(39), "RP保費": v(47), "RP達成率": v(48)}
+        # col 26=當月累計實收業績, 27=當月實收達成率, 38=A&H實收, 39=A&H實收達成率, 47=本月累計RP加權保費
+        # Excel 中無 RP 達成率欄位
+        return {"實收保費": v(26), "實收達成率": v(27), "A&H保費": v(38), "A&H達成率": v(39), "RP保費": v(47), "RP達成率": "－"}
 
 
 def _parse_report_time(all_rows):
@@ -258,7 +259,6 @@ def _parse_new_format(all_rows):
     monthly = {}
     today = {}
 
-    debug_printed = False
     # 逐列掃描：用 col A 名稱比對地區和業展處（不依賴固定行號）
     for row in all_rows:
         raw = str(row[0]).strip() if row[0] else ""
@@ -269,16 +269,10 @@ def _parse_new_format(all_rows):
             monthly[sys_name] = _extract_new_format(row, today=False)
             today[sys_name] = _extract_new_format(row, today=True)
             print(f"✅ 地區：{raw} → {sys_name}")
-            if not debug_printed:
-                print(f"[DEBUG] 地區列 cols 44-52: { {i: row[i] for i in range(44, 53) if i < len(row)} }")
-                debug_printed = True
         elif raw in ALL_NAMES:
             monthly[raw] = _extract_new_format(row, today=False)
             today[raw] = _extract_new_format(row, today=True)
             print(f"✅ 業展處：{raw}")
-            if not debug_printed:
-                print(f"[DEBUG] 業展處列 cols 44-52: { {i: row[i] for i in range(44, 53) if i < len(row)} }")
-                debug_printed = True
 
     report_time = _parse_report_time(all_rows)
     print(f"📅 報表時間：{report_time}")
