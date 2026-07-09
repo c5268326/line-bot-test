@@ -258,6 +258,7 @@ def _parse_new_format(all_rows):
     monthly = {}
     today = {}
 
+    debug_printed = False
     # 逐列掃描：用 col A 名稱比對地區和業展處（不依賴固定行號）
     for row in all_rows:
         raw = str(row[0]).strip() if row[0] else ""
@@ -268,10 +269,16 @@ def _parse_new_format(all_rows):
             monthly[sys_name] = _extract_new_format(row, today=False)
             today[sys_name] = _extract_new_format(row, today=True)
             print(f"✅ 地區：{raw} → {sys_name}")
+            if not debug_printed:
+                print(f"[DEBUG] 地區列 cols 44-52: { {i: row[i] for i in range(44, 53) if i < len(row)} }")
+                debug_printed = True
         elif raw in ALL_NAMES:
             monthly[raw] = _extract_new_format(row, today=False)
             today[raw] = _extract_new_format(row, today=True)
             print(f"✅ 業展處：{raw}")
+            if not debug_printed:
+                print(f"[DEBUG] 業展處列 cols 44-52: { {i: row[i] for i in range(44, 53) if i < len(row)} }")
+                debug_printed = True
 
     report_time = _parse_report_time(all_rows)
     print(f"📅 報表時間：{report_time}")
