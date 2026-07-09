@@ -258,30 +258,25 @@ def _parse_new_format(all_rows):
     monthly = {}
     today = {}
 
-    # 印出 header row 欄位，協助確認欄位映射
-    if len(all_rows) > 2 and len(all_rows[2]) > 30:
+    # 印出 header row 欄位，協助確認 RP 欄位
+    if len(all_rows) > 2 and len(all_rows[2]) > 38:
         r = all_rows[2]
         print(f"[DEBUG] header cols 38-55: { {i: r[i] for i in range(38, 56) if i < len(r)} }")
 
-    # 地區列：row2=header，rows 3-7=5 業發部，row 8=合計(全國)
-    for row in all_rows[2:10]:
+    # 逐列掃描：用 col A 名稱比對地區和業展處（不依賴固定行號）
+    for row in all_rows:
         raw = str(row[0]).strip() if row[0] else ""
+        if not raw:
+            continue
         sys_name = REGION_NAME_MAP.get(raw)
         if sys_name:
             monthly[sys_name] = _extract_new_format(row, today=False)
             today[sys_name] = _extract_new_format(row, today=True)
             print(f"✅ 地區：{raw} → {sys_name}")
-
-    # 業展處列（依位置對應部門名稱）
-    for region, (start_idx, count) in DEPT_ROW_MAP.items():
-        dept_names = DEPARTMENTS[region]
-        for i, row in enumerate(all_rows[start_idx:start_idx + count]):
-            if i >= len(dept_names):
-                break
-            dept_name = dept_names[i]
-            monthly[dept_name] = _extract_new_format(row, today=False)
-            today[dept_name] = _extract_new_format(row, today=True)
-            print(f"✅ 業展處：{region}[{i+1}] → {dept_name}")
+        elif raw in ALL_NAMES:
+            monthly[raw] = _extract_new_format(row, today=False)
+            today[raw] = _extract_new_format(row, today=True)
+            print(f"✅ 業展處：{raw}")
 
     report_time = _parse_report_time(all_rows)
     print(f"📅 報表時間：{report_time}")
