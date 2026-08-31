@@ -24,9 +24,13 @@ export type Scenario = {
 		label?: string;
 	};
 	cursorWaypoints: CursorWaypoint[];
+	/** 痛點口白配音（相對於 public/，例如 "audio/dialogue/s1-pain.mp3"） */
+	painAudioSrc?: string;
 	/** 效益／結果口白 */
 	resultLine: string;
 	resultNumber?: {from: number; to: number; suffix: string};
+	/** 效益口白配音 */
+	resultAudioSrc?: string;
 	/** 各階段時長（frame，30fps） */
 	painFrames: number;
 	/** 角色抬手打開工具的過場時長 */
@@ -64,12 +68,14 @@ export const scenarios: Scenario[] = [
 			{frame: 20, xPercent: 50, yPercent: 18, click: true},
 			{frame: 40, xPercent: 50, yPercent: 15},
 		],
+		painAudioSrc: 'audio/dialogue/s1-pain.mp3',
 		resultLine: '3 秒查完，不用再等總部回覆',
 		resultNumber: {from: 0, to: 3, suffix: ' 秒'},
-		painFrames: 70,
+		resultAudioSrc: 'audio/dialogue/s1-result.mp3',
+		painFrames: 280,
 		raiseFrames: 30,
 		toolFrames: 210,
-		resultFrames: 70,
+		resultFrames: 160,
 		accentColor: '#2fb6a5',
 	},
 	{
@@ -95,11 +101,13 @@ export const scenarios: Scenario[] = [
 			{frame: 0, xPercent: 80, yPercent: 85},
 			{frame: 20, xPercent: 50, yPercent: 15, click: true},
 		],
+		painAudioSrc: 'audio/dialogue/s2-pain.mp3',
 		resultLine: '客戶當場就能看到最新戰績',
-		painFrames: 70,
+		resultAudioSrc: 'audio/dialogue/s2-result.mp3',
+		painFrames: 280,
 		raiseFrames: 30,
 		toolFrames: 180,
-		resultFrames: 70,
+		resultFrames: 155,
 		accentColor: '#e08a3c',
 	},
 ];

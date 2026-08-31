@@ -1,5 +1,5 @@
 import React from 'react';
-import {AbsoluteFill, Img, Sequence, interpolate, useCurrentFrame, staticFile} from 'remotion';
+import {AbsoluteFill, Audio, Img, Sequence, interpolate, useCurrentFrame, staticFile} from 'remotion';
 import {Scenario} from '../data/scenarios';
 import {DeviceFrame} from '../components/DeviceFrame';
 import {CursorPointer} from '../components/CursorPointer';
@@ -43,6 +43,7 @@ const ResultPhase: React.FC<{scenario: Scenario}> = ({scenario}) => {
 			accentColor={scenario.accentColor}
 			caption={scenario.resultLine}
 		>
+			{scenario.resultAudioSrc && <Audio src={staticFile(scenario.resultAudioSrc)} />}
 			{scenario.resultNumber && (
 				<div style={{opacity, textAlign: 'center', marginTop: 12}}>
 					<span style={{fontSize: 56, fontWeight: 800, color: '#7CFFB2'}}>
@@ -72,7 +73,9 @@ export const ScenarioScene: React.FC<{scenario: Scenario}> = ({scenario}) => {
 					entrance
 					accentColor={scenario.accentColor}
 					caption={scenario.painLine}
-				/>
+				>
+					{scenario.painAudioSrc && <Audio src={staticFile(scenario.painAudioSrc)} />}
+				</CharacterStage>
 			</Sequence>
 
 			<Sequence from={painFrames} durationInFrames={raiseFrames}>
