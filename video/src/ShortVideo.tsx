@@ -7,7 +7,8 @@ import {ScenarioScene} from './scenarios/ScenarioScene';
 
 export const TRANSITION_FRAMES = 20;
 
-export const getSceneDuration = (s: Scenario) => s.painFrames + s.toolFrames + s.resultFrames;
+export const getSceneDuration = (s: Scenario) =>
+	s.painFrames + s.raiseFrames + s.toolFrames + s.resultFrames;
 
 export const getTotalDurationInFrames = () => {
 	const sum = scenarios.reduce((acc, s) => acc + getSceneDuration(s), 0);

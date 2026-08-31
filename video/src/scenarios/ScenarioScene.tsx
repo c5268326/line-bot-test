@@ -6,54 +6,80 @@ import {CursorPointer} from '../components/CursorPointer';
 import {ScreenHighlight} from '../components/ScreenHighlight';
 import {CountUp} from '../components/CountUp';
 import {MockScreen} from '../components/MockScreen';
+import {CharacterStage} from '../components/CharacterStage';
 
-const FadeText: React.FC<{
-	children: React.ReactNode;
-	durationInFrames: number;
-	style?: React.CSSProperties;
-}> = ({children, durationInFrames, style}) => {
+const RaisePhase: React.FC<{scenario: Scenario}> = ({scenario}) => {
 	const frame = useCurrentFrame();
-	const opacity = interpolate(
-		frame,
-		[0, 12, durationInFrames - 12, durationInFrames],
-		[0, 1, 1, 0],
-		{extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}
-	);
-	const translateY = interpolate(frame, [0, 12], [16, 0], {
+	const armRaise = interpolate(frame, [0, scenario.raiseFrames - 6], [0, 1], {
+		extrapolateLeft: 'clamp',
+		extrapolateRight: 'clamp',
+	});
+	const scale = interpolate(frame, [0, scenario.raiseFrames], [1, 1.12], {
 		extrapolateLeft: 'clamp',
 		extrapolateRight: 'clamp',
 	});
 
 	return (
-		<AbsoluteFill
-			style={{
-				alignItems: 'center',
-				justifyContent: 'center',
-				padding: '0 90px',
-				textAlign: 'center',
-			}}
+		<CharacterStage
+			armRaise={armRaise}
+			mood="neutral"
+			accentColor={scenario.accentColor}
+			scale={scale}
+		/>
+	);
+};
+
+const ResultPhase: React.FC<{scenario: Scenario}> = ({scenario}) => {
+	const frame = useCurrentFrame();
+	const opacity = interpolate(frame, [0, 12], [0, 1], {
+		extrapolateLeft: 'clamp',
+		extrapolateRight: 'clamp',
+	});
+
+	return (
+		<CharacterStage
+			armRaise={0.75}
+			mood="happy"
+			accentColor={scenario.accentColor}
+			caption={scenario.resultLine}
 		>
-			<div style={{opacity, transform: `translateY(${translateY}px)`, ...style}}>
-				{children}
-			</div>
-		</AbsoluteFill>
+			{scenario.resultNumber && (
+				<div style={{opacity, textAlign: 'center', marginTop: 12}}>
+					<span style={{fontSize: 56, fontWeight: 800, color: '#7CFFB2'}}>
+						<CountUp
+							from={scenario.resultNumber.from}
+							to={scenario.resultNumber.to}
+							startFrame={0}
+							durationInFrames={20}
+						/>
+						{scenario.resultNumber.suffix}
+					</span>
+				</div>
+			)}
+		</CharacterStage>
 	);
 };
 
 export const ScenarioScene: React.FC<{scenario: Scenario}> = ({scenario}) => {
-	const {painFrames, toolFrames, resultFrames} = scenario;
+	const {painFrames, raiseFrames, toolFrames, resultFrames} = scenario;
 
 	return (
-		<AbsoluteFill style={{background: '#0f1226'}}>
+		<AbsoluteFill style={{background: '#12172c'}}>
 			<Sequence from={0} durationInFrames={painFrames}>
-				<FadeText durationInFrames={painFrames}>
-					<div style={{fontSize: 40, fontWeight: 700, color: 'white', lineHeight: 1.5}}>
-						{scenario.painLine}
-					</div>
-				</FadeText>
+				<CharacterStage
+					armRaise={0}
+					mood="worried"
+					entrance
+					accentColor={scenario.accentColor}
+					caption={scenario.painLine}
+				/>
 			</Sequence>
 
-			<Sequence from={painFrames} durationInFrames={toolFrames}>
+			<Sequence from={painFrames} durationInFrames={raiseFrames}>
+				<RaisePhase scenario={scenario} />
+			</Sequence>
+
+			<Sequence from={painFrames + raiseFrames} durationInFrames={toolFrames}>
 				<AbsoluteFill style={{background: '#f0f1f5'}}>
 					<div
 						style={{
@@ -99,24 +125,8 @@ export const ScenarioScene: React.FC<{scenario: Scenario}> = ({scenario}) => {
 				</AbsoluteFill>
 			</Sequence>
 
-			<Sequence from={painFrames + toolFrames} durationInFrames={resultFrames}>
-				<FadeText durationInFrames={resultFrames}>
-					<div style={{fontSize: 44, fontWeight: 800, color: '#7CFFB2'}}>
-						{scenario.resultNumber ? (
-							<>
-								<CountUp
-									from={scenario.resultNumber.from}
-									to={scenario.resultNumber.to}
-									startFrame={0}
-									durationInFrames={20}
-								/>
-								{scenario.resultNumber.suffix}
-								{'　'}
-							</>
-						) : null}
-						{scenario.resultLine}
-					</div>
-				</FadeText>
+			<Sequence from={painFrames + raiseFrames + toolFrames} durationInFrames={resultFrames}>
+				<ResultPhase scenario={scenario} />
 			</Sequence>
 		</AbsoluteFill>
 	);

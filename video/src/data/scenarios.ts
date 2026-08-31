@@ -29,8 +29,11 @@ export type Scenario = {
 	resultNumber?: {from: number; to: number; suffix: string};
 	/** 各階段時長（frame，30fps） */
 	painFrames: number;
+	/** 角色抬手打開工具的過場時長 */
+	raiseFrames: number;
 	toolFrames: number;
 	resultFrames: number;
+	accentColor?: string;
 };
 
 export const FPS = 30;
@@ -63,9 +66,11 @@ export const scenarios: Scenario[] = [
 		],
 		resultLine: '3 秒查完，不用再等總部回覆',
 		resultNumber: {from: 0, to: 3, suffix: ' 秒'},
-		painFrames: 75,
-		toolFrames: 240,
-		resultFrames: 75,
+		painFrames: 70,
+		raiseFrames: 30,
+		toolFrames: 210,
+		resultFrames: 70,
+		accentColor: '#2fb6a5',
 	},
 	{
 		id: 'region-report',
@@ -91,8 +96,10 @@ export const scenarios: Scenario[] = [
 			{frame: 20, xPercent: 50, yPercent: 15, click: true},
 		],
 		resultLine: '客戶當場就能看到最新戰績',
-		painFrames: 75,
-		toolFrames: 210,
-		resultFrames: 75,
+		painFrames: 70,
+		raiseFrames: 30,
+		toolFrames: 180,
+		resultFrames: 70,
+		accentColor: '#e08a3c',
 	},
 ];
