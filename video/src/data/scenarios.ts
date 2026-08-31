@@ -45,7 +45,7 @@ export const FPS = 30;
 export const scenarios: Scenario[] = [
 	{
 		id: 'query-performance',
-		painLine: '拜訪客戶前，臨時要查最新業績…上系統又要等 IT 開權限？',
+		painLine: '拜訪客戶前，臨時要查最新業績…上系統還要等資訊部開權限？',
 		toolName: 'LINE 業績查詢機器人',
 		deviceVariant: 'phone',
 		mockScreen: {
@@ -72,10 +72,10 @@ export const scenarios: Scenario[] = [
 		resultLine: '3 秒查完，不用再等總部回覆',
 		resultNumber: {from: 0, to: 3, suffix: ' 秒'},
 		resultAudioSrc: 'audio/dialogue/s1-result.mp3',
-		painFrames: 280,
+		painFrames: 355,
 		raiseFrames: 30,
 		toolFrames: 210,
-		resultFrames: 160,
+		resultFrames: 170,
 		accentColor: '#2fb6a5',
 	},
 	{
@@ -104,10 +104,10 @@ export const scenarios: Scenario[] = [
 		painAudioSrc: 'audio/dialogue/s2-pain.mp3',
 		resultLine: '客戶當場就能看到最新戰績',
 		resultAudioSrc: 'audio/dialogue/s2-result.mp3',
-		painFrames: 280,
+		painFrames: 305,
 		raiseFrames: 30,
 		toolFrames: 180,
-		resultFrames: 155,
+		resultFrames: 190,
 		accentColor: '#e08a3c',
 	},
 ];

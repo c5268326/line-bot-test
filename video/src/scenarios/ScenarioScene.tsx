@@ -40,6 +40,7 @@ const ResultPhase: React.FC<{scenario: Scenario}> = ({scenario}) => {
 		<CharacterStage
 			armRaise={0.75}
 			mood="happy"
+			talking={Boolean(scenario.resultAudioSrc)}
 			accentColor={scenario.accentColor}
 			caption={scenario.resultLine}
 		>
@@ -71,6 +72,7 @@ export const ScenarioScene: React.FC<{scenario: Scenario}> = ({scenario}) => {
 					armRaise={0}
 					mood="worried"
 					entrance
+					talking={Boolean(scenario.painAudioSrc)}
 					accentColor={scenario.accentColor}
 					caption={scenario.painLine}
 				>

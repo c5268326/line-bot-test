@@ -6,6 +6,7 @@ type CharacterStageProps = {
 	armRaise: number;
 	mood: Mood;
 	entrance?: boolean;
+	talking?: boolean;
 	accentColor?: string;
 	background?: string;
 	caption?: string;
@@ -17,6 +18,7 @@ export const CharacterStage: React.FC<CharacterStageProps> = ({
 	armRaise,
 	mood,
 	entrance,
+	talking,
 	accentColor,
 	background = '#12172c',
 	caption,
@@ -32,8 +34,14 @@ export const CharacterStage: React.FC<CharacterStageProps> = ({
 					transform: `scale(${scale})`,
 				}}
 			>
-				<svg viewBox="0 0 400 520" width={560} height={728}>
-					<Character armRaise={armRaise} mood={mood} entrance={entrance} accentColor={accentColor} />
+				<svg viewBox="0 0 400 560" width={560} height={784}>
+					<Character
+						armRaise={armRaise}
+						mood={mood}
+						entrance={entrance}
+						talking={talking}
+						accentColor={accentColor}
+					/>
 				</svg>
 			</AbsoluteFill>
 

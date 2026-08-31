@@ -41,7 +41,7 @@ export const ShortVideo: React.FC = () => {
 
 	return (
 		<AbsoluteFill style={{background: 'black'}}>
-			<Audio src={staticFile('audio/music/bgm-loop.mp3')} loop volume={0.18} />
+			<Audio src={staticFile('audio/music/bgm-loop.mp3')} loop volume={0.22} />
 			<TransitionSeries>{children}</TransitionSeries>
 		</AbsoluteFill>
 	);
