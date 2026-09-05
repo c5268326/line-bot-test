@@ -1,0 +1,42 @@
+name: 回測研究
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "要執行的研究程式(research/ 底下的檔名)"
+        required: true
+        default: "probe_sources.py"
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+
+    steps:
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安裝套件
+        run: pip install requests pandas numpy
+
+      - name: 執行研究程式
+        run: python "research/${{ inputs.script }}"
+
+      - name: 提交產出結果
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add research/output docs/data 2>/dev/null || true
+          git diff --cached --quiet || git commit -m "回測研究產出 $(TZ='Asia/Taipei' date '+%Y/%m/%d %H:%M')"
+          git pull --rebase --autostash origin main || true
+          git push || true
