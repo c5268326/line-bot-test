@@ -375,6 +375,52 @@ dialog::backdrop { background: rgba(16,23,37,.45); }
 .err { color: var(--up); font-size: 13px; margin-top: 8px; font-weight: 500; }
 .err:empty { display: none; }
 
+/* ===== 策略回測頁 ===== */
+.bt-intro { max-width: 74ch; font-size: 14px; color: var(--ink-2); line-height: 1.8; margin: 0 0 16px; }
+.bt-cfg { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--rule); background: var(--surface); margin-bottom: 16px; }
+.bt-cfg > div { padding: 10px 16px; border-right: 1px solid var(--rule); }
+.bt-cfg > div:last-child { border-right: none; }
+.bt-cfg b { font-family: var(--mono); font-size: 14px; font-weight: 600; display: block; margin-top: 2px; }
+
+.warnbox {
+  border: 1px solid #E6C36B; background: #FDF8EC; border-left: 3px solid #B77400;
+  padding: 12px 15px; margin-bottom: 18px; font-size: 13.5px; line-height: 1.75; color: #4A3B14;
+}
+.warnbox h4 { margin: 0 0 6px; font-size: 13.5px; font-weight: 700; color: #7A5A0B; }
+.warnbox ul { margin: 6px 0 0; padding-left: 18px; }
+.warnbox li { margin-bottom: 4px; }
+
+.bt-chartwrap { padding: 14px 15px 4px; }
+.bt-chartwrap svg { display: block; width: 100%; height: auto; }
+.bt-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 4px 15px 14px; }
+.bt-lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); cursor: pointer; user-select: none; }
+.bt-lg i { width: 15px; height: 3px; flex: none; }
+.bt-lg.is-off { opacity: .35; }
+.bt-lg.is-off i { background: var(--ink-deco) !important; }
+
+table.bt { width: 100%; border-collapse: collapse; min-width: 780px; }
+table.bt th { text-align: right; padding: 9px 12px; border-bottom: 1px solid var(--rule-strong); background: var(--surface-2);
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted); font-weight: 500; white-space: nowrap; }
+table.bt th:first-child, table.bt td:first-child { text-align: left; }
+table.bt td { padding: 9px 12px; border-bottom: 1px solid var(--rule); text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13px; }
+table.bt td:first-child { font-family: var(--sans); font-size: 13.5px; }
+table.bt tr.is-bench td { background: var(--surface-2); font-weight: 600; }
+table.bt tr.is-bench td:first-child { font-weight: 700; }
+.swatch { display: inline-block; width: 10px; height: 10px; margin-right: 7px; vertical-align: 0; }
+
+/* 五張卡片:340px 下限讓寬螢幕排成 3 欄(3+2),不會有單張孤立在整列。
+   格線改用卡片自身的邊框,空格才不會透出底色變成灰塊。 */
+.strat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); background: var(--surface); border: 1px solid var(--rule); }
+.strat { padding: 14px 16px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.strat-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
+.strat-n { font-size: 14.5px; font-weight: 600; }
+.strat-tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase; padding: 1px 5px; border: 1px solid; border-radius: 2px; white-space: nowrap; }
+.tag-q { color: var(--ma-fast); border-color: #A8C3EC; background: #EDF3FC; }
+.tag-j { color: var(--ma-slow); border-color: #D3C3ED; background: #F4EFFC; }
+.strat-d { font-size: 13px; color: var(--ink-2); line-height: 1.7; }
+.strat-r { font-size: 12.5px; color: var(--ink-faint); margin-top: 7px; padding-top: 7px; border-top: 1px dashed var(--rule); }
+.strat-r b { font-family: var(--mono); color: var(--ink-2); }
+
 .foot {
   margin-top: 30px; padding-top: 14px; border-top: 1px solid var(--rule);
   font-size: 12px; color: var(--ink-faint);
@@ -413,6 +459,7 @@ dialog::backdrop { background: rgba(16,23,37,.45); }
   <nav class="tabs" id="tabs">
     <button data-view="scan" class="is-active">檢測站</button>
     <button data-view="detail">個股分析</button>
+    <button data-view="research">策略回測</button>
   </nav>
 
   <!-- ============ 檢測站 ============ -->
@@ -518,6 +565,57 @@ dialog::backdrop { background: rgba(16,23,37,.45); }
         <p class="hint" style="margin:8px 0 0">只描述指標目前的狀態,不提供買賣建議。</p>
         <div class="ai-out" id="ai-out"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- ============ 策略回測 ============ -->
+  <section id="view-research" hidden>
+    <p class="bt-intro">
+      十個台股常見的選股策略,五個量化(可程式化、可回測)、五個質化(需要判斷,無法純程式化)。
+      量化的五個以真實台股日線做了回測,並與「同一批股票等權全部持有」對照 ——
+      那條對照線才是判斷選股邏輯有沒有貢獻的基準。
+    </p>
+
+    <div class="warnbox">
+      <h4>這些數字不能拿來當投資依據</h4>
+      <ul>
+        <li><b>倖存者偏誤:</b>股票池是用「今天」的成交金額前 120 名回頭選的,等於預先知道誰活下來且變大。對照組年化 25% 就是鐵證 —— 台股同期實際約 10~13%。<b>只有「超額」欄位有參考價值,絕對報酬沒有。</b></li>
+        <li><b>未計入股利:</b>報酬僅為價格報酬,高股息策略被系統性低估。</li>
+        <li><b>未計入滑價:</b>手續費與證交稅已計入,但每季換 20 檔的衝擊成本沒算。</li>
+        <li>回測是對歷史的描述,不是對未來的預測,更不是投資建議。</li>
+      </ul>
+    </div>
+
+    <div class="bt-cfg" id="bt-cfg"></div>
+
+    <div class="panel console" style="margin-bottom:16px">
+      <div class="panel-head">
+        <h3 class="panel-title">權益曲線</h3>
+        <div class="togglerow">
+          <button class="toggle is-on" id="bt-stop-off">無停損</button>
+          <button class="toggle" id="bt-stop-on">含 20% 停損</button>
+          <button class="toggle is-on" id="bt-log">對數刻度</button>
+        </div>
+      </div>
+      <div class="bt-chartwrap" id="bt-chart"></div>
+      <div class="bt-legend" id="bt-legend"></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:16px">
+      <div class="panel-head"><h3 class="panel-title">績效對照</h3><span class="panel-note" id="bt-mode-note"></span></div>
+      <div class="tablewrap" style="border:none"><table class="bt"><thead><tr>
+        <th>策略</th><th>年化</th><th>超額</th><th>總報酬</th><th>最大回撤</th><th>夏普</th><th>勝率</th><th>停損率</th>
+      </tr></thead><tbody id="bt-body"></tbody></table></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:16px">
+      <div class="panel-head"><h3 class="panel-title">量化策略 ・ 可回測</h3><span class="panel-note">五個</span></div>
+      <div class="strat-grid" id="strat-quant"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><h3 class="panel-title">質化策略 ・ 需要判斷</h3><span class="panel-note">五個,無法機械回測</span></div>
+      <div class="strat-grid" id="strat-qual"></div>
     </div>
   </section>
 
@@ -1636,9 +1734,12 @@ function renderDetail() {
 function render() {
   document.getElementById("view-scan").hidden = state.view !== "scan";
   document.getElementById("view-detail").hidden = state.view !== "detail";
+  document.getElementById("view-research").hidden = state.view !== "research";
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("is-active", b.dataset.view === state.view));
   renderStatusSource();
-  if (state.view === "scan") renderScan(); else renderDetail();
+  if (state.view === "scan") renderScan();
+  else if (state.view === "research") renderResearch();
+  else renderDetail();
 }
 
 /* =========================================================
@@ -1822,13 +1923,231 @@ async function setupAi() {
 /* --- 縮放 --- */
 let rzTimer = null;
 window.addEventListener("resize", () => {
-  if (state.view !== "detail") return;
   clearTimeout(rzTimer);
-  rzTimer = setTimeout(() => { renderChart(); updateCrosshair(); }, 140);
+  rzTimer = setTimeout(() => {
+    if (state.view === "detail") { renderChart(); updateCrosshair(); }
+    else if (state.view === "research" && bt.data) renderBtChart();
+  }, 140);
+});
+
+
+/* =========================================================
+   14. 策略回測頁
+   ========================================================= */
+const BT_COLORS = ["#2563C9", "#B77400", "#7A4FC0", "#C2255C", "#0094C6"];
+
+const QUANT_STRATEGIES = [
+  ["value_pb", "價值:低股價淨值比",
+   "每季把股票按股價淨值比由低到高排序,買最便宜的一批。台股的價值溢酬在中小型股比大型股顯著。最大陷阱是價值陷阱 —— 航運、面板、鋼鐵、DRAM 這類景氣循環股,在循環高點的本益比反而最低,那是賣點不是買點。"],
+  ["quality_value", "品質×價值:ROE 與 PBR 雙因子",
+   "把「賺錢能力」和「便宜程度」各自排名後相加,而不是只看便宜。ROE 由每日的 PBR÷PER 推導而得。加入品質過濾的主要作用,是排掉那些「便宜有便宜的道理」的價值陷阱。"],
+  ["dividend", "高現金殖利率",
+   "台股獨有的生態:高股息 ETF 規模龐大,除權息是結構性行情。但關鍵不是殖利率高低,是填息率 —— 不填息的除息等於左手換右手,還要繳二代健保補充保費。單看殖利率會大量選到「因為股價暴跌所以殖利率變高」的股票。"],
+  ["momentum", "動能:12-1 相對強弱",
+   "用過去 12 個月的報酬排序,但排除最近 1 個月(台股短期反轉效應明顯)。這是全球最穩健的因子之一,台股也成立。缺點是動能崩潰:市場由空轉多的轉折點,動能組合會單月重挫。"],
+  ["revenue_momentum", "月營收年增動能",
+   "台股獨有的優勢 —— 上市櫃公司每月 10 日前公布月營收,全世界少見的高頻基本面資料。美股一季才一次財報,台股一年有 12 次訊號。回測時只採用換股日 45 天前所屬的月份,確保當下確實已公布。"],
+];
+
+const QUAL_STRATEGIES = [
+  ["護城河 / 競爭優勢",
+   "看毛利率能否長期維持 —— 這是護城河最誠實的體溫計。台積電的護城河是製程領先加上客戶轉換成本(換一家代工要重新驗證兩年),大立光是良率 know-how。要問的問題是:如果對手多投一倍資本,幾年能追上?追不上的才是護城河。"],
+  ["供應鏈位置與議價能力",
+   "台股七成以上是電子供應鏈,決定命運的是站在價值鏈哪一段。上游材料設備、中游晶圓封測、下游組裝,毛利結構天差地遠。要看客戶集中度:蘋果概念股是雙面刃,單一客戶佔比超過三成就是重大風險。"],
+  ["經營層與公司治理",
+   "台股家族企業比例高,這一項的權重比美股更高。具體看董監持股質押比率(高質押代表大股東缺錢,是典型警訊)、是否頻繁現金增資稀釋小股東、關係人交易金額。證交所每年公布的公司治理評鑑可以當初篩。"],
+  ["景氣循環定位",
+   "半導體、航運、面板、鋼鐵都是強週期股,估值指標在它們身上會給出完全相反的訊號。要看庫存週期、產能利用率、報價趨勢。2021 年航運股本益比 2 倍時是最危險的時候,不是最便宜的時候。"],
+  ["財報品質與地雷排查",
+   "這是「避開」而非「選到」的策略,但對長期報酬的影響往往比選股更大。警訊:應收帳款與存貨成長遠高於營收成長、營業現金流長期低於淨利、頻繁更換會計師、大量非經常性損益美化 EPS。台股 KY 股的案例幾乎都能提前看出來。"],
+];
+
+const bt = { data: null, stop: false, log: true, hidden: new Set() };
+
+async function loadBacktest() {
+  if (bt.data) return bt.data;
+  const el = document.getElementById("seed-backtest");
+  if (el && el.textContent.trim()) {
+    try { bt.data = JSON.parse(el.textContent); } catch (e) { /* 格式壞掉就走 fetch */ }
+  }
+  if (!bt.data) bt.data = await tryFetch("data/backtest.json");
+  return bt.data;
+}
+
+const btKey = () => bt.stop ? "with_stop" : "no_stop";
+
+function renderBtConfig() {
+  const c = bt.data.config;
+  document.getElementById("bt-cfg").innerHTML = [
+    ["回測期間", `${c.start.slice(0, 7)} ~ ${c.end.slice(0, 7)}`],
+    ["股票池", `${c.universe_size} 檔`],
+    ["每期持股", `${c.top_n} 檔等權`],
+    ["換股頻率", "每季"],
+    ["停損", `${Math.round(c.stop_loss * 100)}%`],
+    ["交易成本", `手續費 ${(c.fee * 100).toFixed(4)}% ×2 + 證交稅 ${(c.tax * 100).toFixed(1)}%`],
+  ].map(([k, v]) => `<div><div class="lbl">${esc(k)}</div><b>${esc(v)}</b></div>`).join("");
+}
+
+function renderBtChart() {
+  const host = document.getElementById("bt-chart");
+  const W = Math.max(360, host.clientWidth || 900), H = 380;
+  const padL = 8, padR = 54, padT = 12, padB = 26;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const series = [];
+  Object.entries(bt.data.strategies).forEach(([k, s], i) => {
+    if (bt.hidden.has(k)) return;
+    series.push({ key: k, label: s.label, color: BT_COLORS[i % BT_COLORS.length], curve: s[btKey()].curve });
+  });
+  const bench = bt.data.benchmark;
+  const showBench = !bt.hidden.has("__bench");
+
+  let lo = Infinity, hi = -Infinity;
+  const scan = c => c.forEach(p => { if (p.v < lo) lo = p.v; if (p.v > hi) hi = p.v; });
+  series.forEach(s => scan(s.curve));
+  if (showBench) scan(bench.curve);
+  if (lo === Infinity) { host.innerHTML = `<p class="hint" style="padding:20px 0">請至少選一條曲線。</p>`; return; }
+  lo = Math.max(0.2, lo * 0.9); hi *= 1.08;
+
+  const yv = v => bt.log
+    ? padT + plotH - (Math.log(Math.max(v, 1e-6)) - Math.log(lo)) / (Math.log(hi) - Math.log(lo)) * plotH
+    : padT + plotH - (v - lo) / (hi - lo) * plotH;
+
+  const all = (showBench ? bench.curve : series[0].curve);
+  const t0 = new Date(all[0].d).getTime(), t1 = new Date(all[all.length - 1].d).getTime();
+  const xd = d => padL + (new Date(d).getTime() - t0) / (t1 - t0) * plotW;
+
+  let g = "";
+  // Y 軸:對數用倍數刻度,線性用等距
+  const ticks = [];
+  if (bt.log) {
+    for (const m of [0.5, 1, 2, 3, 5, 10, 20, 30, 50]) if (m >= lo && m <= hi) ticks.push(m);
+  } else {
+    for (const t of niceTicks(lo, hi, 5)) ticks.push(t);
+  }
+  ticks.forEach(t => {
+    const y = yv(t).toFixed(1);
+    g += `<line class="c-grid" x1="${padL}" y1="${y}" x2="${padL + plotW}" y2="${y}"/>`;
+    g += `<text class="c-txt" x="${padL + plotW + 6}" y="${(+y + 3.5).toFixed(1)}">${t}×</text>`;
+  });
+  // 本金基準線
+  if (1 >= lo && 1 <= hi) g += `<line class="c-axis" x1="${padL}" y1="${yv(1).toFixed(1)}" x2="${padL + plotW}" y2="${yv(1).toFixed(1)}"/>`;
+
+  // X 軸年份
+  const y0 = new Date(all[0].d).getFullYear(), y1 = new Date(all[all.length - 1].d).getFullYear();
+  for (let y = y0 + 1; y <= y1; y++) {
+    const x = xd(`${y}-01-01`);
+    if (x < padL || x > padL + plotW) continue;
+    g += `<line class="c-grid" x1="${x.toFixed(1)}" y1="${padT}" x2="${x.toFixed(1)}" y2="${padT + plotH}" opacity="0.6"/>`;
+    g += `<text class="c-txt" x="${x.toFixed(1)}" y="${H - 8}" text-anchor="middle">${y}</text>`;
+  }
+
+  const path = c => c.map((p, i) => (i ? "L" : "M") + xd(p.d).toFixed(1) + " " + yv(p.v).toFixed(1)).join(" ");
+
+  // 對照組畫成粗虛線,和策略線區隔開,不佔用類別配色
+  if (showBench) {
+    g += `<path d="${path(bench.curve)}" fill="none" stroke="var(--ink)" stroke-width="2.4"
+           stroke-dasharray="5 3" opacity="0.55" stroke-linejoin="round"/>`;
+  }
+  series.forEach(s => {
+    g += `<path d="${path(s.curve)}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const last = s.curve[s.curve.length - 1];
+    g += `<circle cx="${xd(last.d).toFixed(1)}" cy="${yv(last.v).toFixed(1)}" r="3" fill="${s.color}"/>`;
+  });
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img"
+    aria-label="各策略權益曲線,${bt.stop ? "含 20% 停損" : "無停損"}">${g}</svg>`;
+}
+
+function renderBtLegend() {
+  const items = Object.entries(bt.data.strategies).map(([k, s], i) =>
+    `<span class="bt-lg${bt.hidden.has(k) ? " is-off" : ""}" data-k="${k}" role="button" tabindex="0">
+       <i style="background:${BT_COLORS[i % BT_COLORS.length]}"></i>${esc(s.label)}</span>`);
+  items.unshift(`<span class="bt-lg${bt.hidden.has("__bench") ? " is-off" : ""}" data-k="__bench" role="button" tabindex="0">
+       <i style="background:var(--ink);opacity:.55"></i>${esc(bt.data.benchmark.label)}</span>`);
+  document.getElementById("bt-legend").innerHTML = items.join("") +
+    `<span class="hint" style="margin-left:auto">點圖例可切換顯示</span>`;
+}
+
+function renderBtTable() {
+  const bc = bt.data.benchmark.cagr;
+  const rows = [`<tr class="is-bench"><td>${esc(bt.data.benchmark.label)}</td>
+      <td>${pctTxt(bc, 2)}</td><td>—</td><td>${pctTxt(bt.data.benchmark.total_return, 1)}</td>
+      <td>${pctTxt(bt.data.benchmark.max_drawdown, 1)}</td><td>${bt.data.benchmark.sharpe ?? "—"}</td>
+      <td>—</td><td>—</td></tr>`];
+  Object.entries(bt.data.strategies).forEach(([k, s], i) => {
+    const m = s[btKey()];
+    const ex = m.cagr - bc;
+    rows.push(`<tr><td><span class="swatch" style="background:${BT_COLORS[i % BT_COLORS.length]}"></span>${esc(s.label)}</td>
+      <td>${pctTxt(m.cagr, 2)}</td>
+      <td class="${ex >= 0 ? "up" : "down"}">${(ex * 100 >= 0 ? "+" : "−") + Math.abs(ex * 100).toFixed(2)}pp</td>
+      <td>${pctTxt(m.total_return, 1)}</td><td>${pctTxt(m.max_drawdown, 1)}</td>
+      <td>${m.sharpe ?? "—"}</td><td>${pctTxt(m.win_rate, 1)}</td>
+      <td>${bt.stop ? pctTxt(m.stop_rate, 1) : "—"}</td></tr>`);
+  });
+  document.getElementById("bt-body").innerHTML = rows.join("");
+  document.getElementById("bt-mode-note").textContent = bt.stop ? "含 20% 停損" : "無停損";
+}
+
+const pctTxt = (v, d) => v == null || !Number.isFinite(v)
+  ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v * 100).toFixed(d) + "%";
+
+function renderStrategyCards() {
+  const bc = bt.data ? bt.data.benchmark.cagr : null;
+  document.getElementById("strat-quant").innerHTML = QUANT_STRATEGIES.map(([k, name, desc]) => {
+    let res = "";
+    if (bt.data && bt.data.strategies[k]) {
+      const m = bt.data.strategies[k].no_stop, ex = m.cagr - bc;
+      res = `<div class="strat-r">回測年化 <b>${pctTxt(m.cagr, 2)}</b> ・
+             對照組超額 <b class="${ex >= 0 ? "up" : "down"}">${(ex * 100 >= 0 ? "+" : "−") + Math.abs(ex * 100).toFixed(2)}pp</b></div>`;
+    }
+    return `<div class="strat"><div class="strat-h"><span class="strat-n">${esc(name)}</span>
+            <span class="strat-tag tag-q">量化</span></div>
+            <div class="strat-d">${esc(desc)}</div>${res}</div>`;
+  }).join("");
+
+  document.getElementById("strat-qual").innerHTML = QUAL_STRATEGIES.map(([name, desc]) =>
+    `<div class="strat"><div class="strat-h"><span class="strat-n">${esc(name)}</span>
+     <span class="strat-tag tag-j">質化</span></div>
+     <div class="strat-d">${esc(desc)}</div>
+     <div class="strat-r">沒有客觀的歷史數列,無法機械回測。硬要做只能換成代理變數,那已經是另一個策略了。</div></div>`).join("");
+}
+
+async function renderResearch() {
+  const data = await loadBacktest();
+  if (!data) {
+    document.getElementById("bt-chart").innerHTML =
+      `<p class="hint" style="padding:20px 0">找不到回測資料(data/backtest.json)。策略說明仍可閱讀。</p>`;
+    renderStrategyCards();
+    return;
+  }
+  renderBtConfig(); renderBtChart(); renderBtLegend(); renderBtTable(); renderStrategyCards();
+}
+
+document.getElementById("bt-stop-off").addEventListener("click", () => {
+  bt.stop = false; syncBtToggles(); renderBtChart(); renderBtTable();
+});
+document.getElementById("bt-stop-on").addEventListener("click", () => {
+  bt.stop = true; syncBtToggles(); renderBtChart(); renderBtTable();
+});
+document.getElementById("bt-log").addEventListener("click", () => {
+  bt.log = !bt.log; syncBtToggles(); renderBtChart();
+});
+function syncBtToggles() {
+  document.getElementById("bt-stop-off").classList.toggle("is-on", !bt.stop);
+  document.getElementById("bt-stop-on").classList.toggle("is-on", bt.stop);
+  document.getElementById("bt-log").classList.toggle("is-on", bt.log);
+}
+document.getElementById("bt-legend").addEventListener("click", ev => {
+  const el = ev.target.closest(".bt-lg[data-k]");
+  if (!el) return;
+  const k = el.dataset.k;
+  bt.hidden.has(k) ? bt.hidden.delete(k) : bt.hidden.add(k);
+  renderBtChart(); renderBtLegend();
 });
 
 /* =========================================================
-   13. 啟動
+   15. 啟動
    ========================================================= */
 (async function boot() {
   await initStorage();
