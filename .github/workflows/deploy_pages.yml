@@ -1,11 +1,20 @@
 name: 部署檢測站到 GitHub Pages
 
+# ⚠ 這個 workflow 目前只能手動觸發。
+#
+# 原因:Actions 的預設 GITHUB_TOKEN 沒有「建立 Pages 站台」的權限,
+# 第一次執行時 actions/configure-pages 會回報
+# 「Create Pages site failed: Resource not accessible by integration」。
+#
+# 要啟用,請先到 repo 的 Settings → Pages,把 Source 設成 GitHub Actions,
+# 然後把下面 push: 那四行的註解取消,之後 docs/ 一有變動就會自動重新部署
+# (包含排程更新 stocks.json 之後的刷新)。
 on:
-  push:
-    branches: [main]
-    paths:
-      - "docs/**"
-      - ".github/workflows/deploy_pages.yml"
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - "docs/**"
+  #     - ".github/workflows/deploy_pages.yml"
   workflow_dispatch:
 
 permissions:

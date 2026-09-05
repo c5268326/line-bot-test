@@ -1,4 +1,4 @@
-from flask import Flask, request, abort
+from flask import Flask, request, abort, redirect, send_from_directory
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
 from linebot.models import (
@@ -734,6 +734,31 @@ def build_performance_text():
 @app.route("/", methods=["GET"])
 def index():
     return "LINE Bot is running."
+
+
+# ---------------------------------------------------------------------
+# 台股訊號檢測站(docs/ 目錄下的靜態網頁)
+# 讓現有的 Render 服務直接把這個頁面發布出去,不必另外架站。
+# 網頁會以相對路徑讀取 data/stocks.json,所以統一掛在 /stock/ 底下。
+# ---------------------------------------------------------------------
+DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "docs")
+
+
+@app.route("/stock", methods=["GET"])
+def stock_station_redirect():
+    # 少了尾斜線的話,網頁內的相對路徑會解析錯,所以先導正
+    return redirect("/stock/", code=302)
+
+
+@app.route("/stock/", methods=["GET"])
+def stock_station():
+    return send_from_directory(DOCS_DIR, "index.html")
+
+
+@app.route("/stock/<path:filename>", methods=["GET"])
+def stock_station_asset(filename):
+    """提供 docs/ 底下的其他檔案,主要是 data/stocks.json"""
+    return send_from_directory(DOCS_DIR, filename)
 
 
 @app.route("/update", methods=["GET"])
