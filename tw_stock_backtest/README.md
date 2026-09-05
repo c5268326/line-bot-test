@@ -116,6 +116,20 @@ python -m tw_stock_backtest.run_backtest --source synthetic --output-dir out_syn
   用 CLI：`--preset long_term` / `--preset short_term`。
 - `buy_commission_rate` / `sell_commission_rate` / `sell_tax_rate`：交易成本假設。
 
+## 績效指標：逐筆勝率 vs. 持有期間正報酬機率
+
+`metrics.generate_report()` 會同時算出兩種完全不同的「勝率」，不要混用：
+- `win_rate`（`trade_stats()`）：逐筆交易的勝率，衡量選股/進出場訊號本身的命中率。
+- `holding_period_win_rate`（`holding_period_win_rate()` / `holding_period_win_rates()`）：
+  「任選一天進場、持有 N 年後是正報酬」的機率，用重疊滾動窗口計算，衡量的是「拉長持有
+  時間後虧錢的機率有多低」，跟選股準不準是兩回事。
+
+用真實台股資料（見 `RESEARCH.md`「勝率驗證」一節）算出來的結果：**沒有任何策略的逐筆
+勝率接近 90%**（實測 43~53%，這是正常且預期中的結果，多因子策略靠賺賠不對稱獲利，不是
+靠常常猜對）；但**持有期間拉長到 3 年以上，正報酬機率可以超過 90%**——不過這個數字有
+嚴重的統計限制（重疊窗口非獨立樣本、單一歷史路徑），詳見 `RESEARCH.md` 與函式 docstring，
+不要直接拿來當「保證」。
+
 ## 已知限制（誠實列出，正式使用前務必知道）
 
 - 再平衡目前只處理「因子排名被淘汰 / 新入選」的股票，既有且仍在名單內的持股**不會**被強制

@@ -66,6 +66,44 @@ def calmar_ratio(equity_curve: pd.Series) -> float:
     return cagr(equity_curve) / abs(mdd)
 
 
+def holding_period_win_rate(equity_curve: pd.Series, years: float) -> dict:
+    """「任選一天進場、持有 N 年後是正報酬」的機率，用滾動窗口在整條權益曲線上計算。
+
+    這是「持有期間正報酬機率」，跟 trade_stats() 的逐筆交易勝率是完全不同的指標：
+    後者衡量選股/進出場訊號本身的命中率，前者衡量「只要拉長持有時間，虧錢的機率有多低」，
+    兩者不能混為一談——一個策略逐筆勝率可以只有 48%，但只要平均賺比平均賠多，
+    N 年持有期的正報酬機率仍然可以很高（這正是台股 2015-2026 真實回測看到的現象）。
+
+    **務必連同以下限制一起解讀，否則這個數字會誤導人**：
+    1. 滾動窗口彼此高度重疊、不是獨立樣本——同一段大多頭會讓所有涵蓋到它的窗口一起
+       「獲勝」，樣本數看起來很多，但有效的獨立資訊量遠小於 windows 數字。
+    2. 只是「一條歷史路徑」的結果，不是多次獨立模擬；回測期間如果剛好是罕見的長多頭
+       （例如台股 2015-2026 有台積電/半導體超級週期），這個機率會系統性偏高，不代表
+       未來的無條件機率。
+    3. 只衡量「方向」（賺 vs 賠），不代表报酬幅度、也不是投資建議。
+    """
+    n = len(equity_curve)
+    if n < 2:
+        return {"years": years, "windows": 0, "wins": 0, "win_rate": None}
+    dates = equity_curve.index
+    values = equity_curve.to_numpy()
+    days = int(round(years * 365.25))
+    target_dates = dates + pd.Timedelta(days=days)
+    end_idx = dates.searchsorted(target_dates)
+    valid = end_idx < n
+    total = int(valid.sum())
+    if total == 0:
+        return {"years": years, "windows": 0, "wins": 0, "win_rate": None}
+    start_idx = np.arange(n)[valid]
+    wins = int((values[end_idx[valid]] > values[start_idx]).sum())
+    return {"years": years, "windows": total, "wins": wins, "win_rate": wins / total}
+
+
+def holding_period_win_rates(equity_curve: pd.Series,
+                              horizons_years: tuple[float, ...] = (1, 3, 5, 7, 10)) -> dict:
+    return {y: holding_period_win_rate(equity_curve, y) for y in horizons_years}
+
+
 def round_trip_pnl(result: BacktestResult) -> pd.DataFrame:
     """把買/賣配對成一筆筆完整交易（本框架每檔股票同時最多一個持倉，配對是簡單的先進先出）。"""
     open_trades: dict[str, list] = {}
@@ -144,6 +182,7 @@ def generate_report(result: BacktestResult, config, benchmark_close: pd.Series |
         "calmar_ratio": calmar_ratio(equity_curve),
         **mdd,
         **trade_stats(result),
+        "holding_period_win_rate": holding_period_win_rates(equity_curve),
     }
     if benchmark_close is not None:
         report.update(benchmark_comparison(equity_curve, benchmark_close))
@@ -170,6 +209,18 @@ def format_report_text(report: dict) -> str:
         f"停損出場次數：{report.get('num_stop_loss_exits', 0)}　"
         f"換股出場次數：{report.get('num_rebalance_exits', 0)}",
     ]
+    hpwr = report.get("holding_period_win_rate")
+    if hpwr:
+        lines.append("----- 持有期間正報酬機率（重疊窗口，非獨立樣本，僅供參考見說明）-----")
+        for years in sorted(hpwr):
+            info = hpwr[years]
+            if info["win_rate"] is None:
+                lines.append(f"持有 {years:>2.0f} 年：資料長度不足，無法計算")
+            else:
+                lines.append(
+                    f"持有 {years:>2.0f} 年：正報酬 {info['wins']}/{info['windows']} "
+                    f"= {info['win_rate']:.1%}"
+                )
     if "benchmark_cagr" in report:
         lines += [
             "----- 對比基準 -----",
