@@ -83,7 +83,12 @@ python -m tw_stock_backtest.run_backtest --source synthetic --output-dir out_syn
 - `factor_weights`：調整價值/品質/成長/動能/低波動/籌碼因子的權重（設 0 代表停用）。
 - `top_n` / `defensive_top_n` / `macro_defensive_threshold`：總經轉差時自動縮減持股檔數。
 - `stop_loss_pct`：預設 0.20（-20%），改這一個數字就能測試不同停損%的影響。
-- `rebalance_freq`："M"（月頻）或 "Q"（季頻）。
+- `rebalance_freq`："W"（週頻）、"M"（月頻）或 "Q"（季頻）。
+- `factor_windows`：動能/波動度因子的回看天數，長期策略用長窗口（如 252/21/60 日）濾雜訊，
+  短期策略要縮短（如 60/5/20 日）才能捕捉半年內的訊號。
+- 已內建兩組預設：`config.long_term_config()`（長期投資）與 `config.short_term_config()`
+  （半年內短期投資），差異與使用方式見 RESEARCH.md「長期 vs 短期投資策略設計」一節，或直接
+  用 CLI：`--preset long_term` / `--preset short_term`。
 - `buy_commission_rate` / `sell_commission_rate` / `sell_tax_rate`：交易成本假設。
 
 ## 已知限制（誠實列出，正式使用前務必知道）

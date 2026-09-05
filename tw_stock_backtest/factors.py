@@ -9,7 +9,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .config import FactorWeights
+from .config import FactorWeights, FactorWindows
 
 RAW_FACTOR_COLUMNS = [
     "earnings_yield", "book_to_price", "dividend_yield",
@@ -19,18 +19,24 @@ RAW_FACTOR_COLUMNS = [
 ]
 
 
-def build_price_factors(prices: pd.DataFrame) -> pd.DataFrame:
-    """由日頻價格面板算出動能、波動度因子，回傳長格式 (date, ticker, momentum_12_1, low_volatility)。"""
+def build_price_factors(prices: pd.DataFrame, windows: FactorWindows | None = None) -> pd.DataFrame:
+    """由日頻價格面板算出動能、波動度因子，回傳長格式 (date, ticker, momentum_12_1, low_volatility)。
+
+    `momentum_12_1` 這個欄位名稱沿用長期策略的預設窗口（12-1個月）命名，但實際回看天數由
+    `windows` 決定——短期策略（見 config.short_term_config）會把它縮短成約「3個月-1週」，
+    欄位名稱不變是為了讓 FactorWeights 的設定不必因為策略換了回看窗口而跟著改名。
+    """
+    windows = windows or FactorWindows()
     df = prices.sort_values(["ticker", "date"]).copy()
     df["ret"] = df.groupby("ticker")["close"].pct_change()
-    # 12-1 動能：用「前 21 個交易日」對「前 252 個交易日」的價格比，排除最近一個月避開短期反轉。
     df["momentum_12_1"] = df.groupby("ticker")["close"].transform(
-        lambda s: s.shift(21) / s.shift(252) - 1
+        lambda s: s.shift(windows.momentum_skip_days) / s.shift(windows.momentum_lookback_days) - 1
     )
-    vol_60d = df.groupby("ticker")["ret"].transform(
-        lambda s: s.rolling(60, min_periods=30).std() * np.sqrt(252)
+    vol = df.groupby("ticker")["ret"].transform(
+        lambda s: s.rolling(windows.volatility_window_days,
+                             min_periods=max(5, windows.volatility_window_days // 2)).std() * np.sqrt(252)
     )
-    df["low_volatility"] = -vol_60d  # 取負號，讓「數值越大 = 波動度越低 = 越好」
+    df["low_volatility"] = -vol  # 取負號，讓「數值越大 = 波動度越低 = 越好」
     df["avg_turnover_20d"] = df.groupby("ticker").apply(
         lambda g: (g["close"] * g["volume"]).rolling(20, min_periods=10).mean()
     ).reset_index(level=0, drop=True)

@@ -1,4 +1,4 @@
-"""回測引擎：依因子複合分數選股、月/季再平衡、-20% 停損出場。
+"""回測引擎：依因子複合分數選股、週/月/季再平衡、-20% 停損出場。
 
 **已知簡化（誠實列出）**：
 - 再平衡只處理「因子排名被淘汰 / 新入選」的股票，既有且仍在名單內的持股不會被強制調整回
@@ -48,7 +48,7 @@ class Backtester:
 
     def run(self, initial_capital: float = 1_000_000.0) -> BacktestResult:
         cfg = self.config
-        price_factors = F.build_price_factors(self.prices)
+        price_factors = F.build_price_factors(self.prices, cfg.factor_windows)
         fund_factors = F.build_fundamental_factors(self.fundamentals)
         macro_score = M.compute_macro_score(self.macro_df)
 
@@ -59,7 +59,7 @@ class Backtester:
         if len(calendar) == 0:
             raise ValueError("回測期間內沒有任何價格資料，請檢查 start_date/end_date 與資料源回傳結果。")
 
-        period = "M" if cfg.rebalance_freq == "M" else "Q"
+        period = {"W": "W", "M": "M", "Q": "Q"}.get(cfg.rebalance_freq, "M")
         calendar_series = calendar.to_series()
         decision_dates = set(calendar_series.groupby(calendar.to_period(period)).max().tolist())
 

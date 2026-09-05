@@ -6,6 +6,12 @@
 真實回測（需要有網路權限的環境，並先 pip install -r tw_stock_backtest/requirements.txt）：
     python -m tw_stock_backtest.run_backtest --source finmind --start 2015-01-01 --end 2024-12-31 \
         --output-dir out
+
+長期 / 短期策略預設（見 config.long_term_config / config.short_term_config）：
+    python -m tw_stock_backtest.run_backtest --source finmind --preset long_term \
+        --start 2015-01-01 --end 2024-12-31 --output-dir out_long_term
+    python -m tw_stock_backtest.run_backtest --source finmind --preset short_term \
+        --start 2024-03-01 --end 2024-09-01 --output-dir out_short_term
 """
 from __future__ import annotations
 
@@ -16,7 +22,7 @@ import os
 import pandas as pd
 
 from .backtest import Backtester
-from .config import BacktestConfig
+from .config import BacktestConfig, long_term_config, short_term_config
 
 
 def build_data_source(name: str):
@@ -39,6 +45,9 @@ def main():
     parser = argparse.ArgumentParser(description="台股多因子回測")
     parser.add_argument("--source", default="synthetic",
                          choices=["synthetic", "finmind", "yfinance", "twse"])
+    parser.add_argument("--preset", default="default",
+                         choices=["default", "long_term", "short_term"],
+                         help="long_term=長期投資策略預設；short_term=半年內短期投資策略預設")
     parser.add_argument("--start", default=None, help="覆蓋 config.py 的 start_date")
     parser.add_argument("--end", default=None, help="覆蓋 config.py 的 end_date")
     parser.add_argument("--universe-file", default=None,
@@ -51,7 +60,11 @@ def main():
     parser.add_argument("--output-dir", default="tw_stock_backtest_output")
     args = parser.parse_args()
 
-    config = BacktestConfig()
+    config = {
+        "default": BacktestConfig,
+        "long_term": long_term_config,
+        "short_term": short_term_config,
+    }[args.preset]()
     if args.start:
         config.start_date = args.start
     if args.end:
@@ -64,7 +77,8 @@ def main():
         with open(args.universe_file, encoding="utf-8") as f:
             config.universe = [line.strip() for line in f if line.strip()]
 
-    print(f"[1/4] 使用資料源：{args.source}")
+    print(f"[1/4] 使用資料源：{args.source}　策略預設：{args.preset}"
+          f"（再平衡頻率={config.rebalance_freq}, top_n={config.top_n}, 停損={config.stop_loss_pct:.0%}）")
     source = build_data_source(args.source)
     all_tickers = list(dict.fromkeys(config.universe + [config.benchmark]))
 
