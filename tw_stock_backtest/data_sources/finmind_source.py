@@ -1,13 +1,25 @@
 """以 FinMind API 作為資料源（建議的主力資料源，台股基本面資料最完整）。
 
-**重要**：本檔案是在網路出口被封鎖、無法連線 https://finmind.github.io/ 查證最新文件的
-沙盒環境中撰寫的，資料集名稱與欄位是依訓練資料當中對 FinMind v4 API 的既有知識所寫，
-API 可能已經改版。第一次執行前請務必：
-  1. 到 https://finmind.github.io/ 核對 dataset 名稱與回傳欄位是否與本檔案假設一致。
-  2. 若欄位對不上，只需要修改 `_DATASET_*` 常數與對應的欄位映射，不用動其他模組。
+本檔案最初是在網路出口被封鎖、無法連線 https://finmind.github.io/ 查證文件的沙盒環境中
+撰寫的，欄位映射當時純粹依訓練資料裡的既有知識所寫。後來另一個有網路權限的 Claude
+session（在同一個 repo 的 `research/` 目錄工作）實際打過這些端點做了交叉驗證
+（見 repo 根目錄 `RESEARCH_HANDOFF.md` 第五之二節），結果：
 
-免費額度：每小時 600 次 API 呼叫；部分資料集（如還原股價）僅開放付費贊助帳戶。
-需要環境變數 `FINMIND_TOKEN`（可留空以匿名方式呼叫，額度較低）。
+- **STOCK_DAY 舊端點欄位順序、六個 `_DATASET_*` 名稱、損益表/資產負債表科目候選字串、
+  `TaiwanExchangeRate` 的 `cash_sell`/`spot_sell` 欄位 —— 全部驗證通過，不用改。**
+- 唯一驗證出的問題（已修正）：`TaiwanStockMonthRevenue` 的 `date` 欄實測是「營收所屬月份
+  的次月 1 日」，不是公告日（台股規定次月 10 日前公布，`date` 可能早最多 9 天），原本的
+  fallback 邏輯因為 `date` 恆有值而永遠不會被觸發。現在改成不信任 `date` 欄，一律用
+  「營收所屬月份 + 1 個月 + 10 天」估計公告可用日；YoY 計算也從 `pct_change(12)`（假設無
+  缺漏月）改成用 `(revenue_year, revenue_month)` 顯式對齊。
+
+即便如此，FinMind API 仍可能持續改版，建議正式使用前仍對照
+https://finmind.github.io/ 抽查一次；若欄位對不上，只需要修改 `_DATASET_*` 常數與對應的
+欄位映射，不用動其他模組。
+
+免費額度：每小時 600 次 API 呼叫，且實測額度偏緊（同一個交叉驗證來源曾用不夠保守的間隔
+連續打 360 次請求，跑了 110 分鐘才被迫取消）——預設請求間隔與重試退避已依實測結果調整，
+不建議調快。需要環境變數 `FINMIND_TOKEN`（可留空以匿名方式呼叫，額度較低）。
 """
 from __future__ import annotations
 
@@ -31,9 +43,13 @@ _DATASET_EXCHANGE_RATE = "TaiwanExchangeRate"
 
 
 class FinMindDataSource(DataSource):
-    def __init__(self, token: str | None = None, request_interval_sec: float = 0.15):
+    def __init__(self, token: str | None = None, request_interval_sec: float = 1.5,
+                 max_retries: int = 5):
         self.token = token or os.environ.get("FINMIND_TOKEN", "")
+        # 跨 session 實測：匿名額度很緊，360 次請求以過快的間隔呼叫曾跑了 110 分鐘才被迫取消，
+        # 1.5~2 秒間隔加上下面的指數退避是實測後建議的保守設定，不要調快。
         self.request_interval_sec = request_interval_sec
+        self.max_retries = max_retries
 
     def _request(self, dataset: str, data_id: str | None, start: str, end: str) -> pd.DataFrame:
         params = {"dataset": dataset, "start_date": start, "end_date": end}
@@ -41,13 +57,28 @@ class FinMindDataSource(DataSource):
             params["data_id"] = data_id
         if self.token:
             params["token"] = self.token
-        resp = requests.get(FINMIND_URL, params=params, timeout=30)
-        resp.raise_for_status()
-        payload = resp.json()
-        if payload.get("status") != 200:
-            raise RuntimeError(f"FinMind 回傳錯誤：{payload.get('msg')}")
-        time.sleep(self.request_interval_sec)  # 避免超過每小時 600 次額度
-        return pd.DataFrame(payload["data"])
+
+        backoff = self.request_interval_sec
+        last_error: Exception | None = None
+        for attempt in range(self.max_retries):
+            resp = requests.get(FINMIND_URL, params=params, timeout=30)
+            if resp.status_code == 429:
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            resp.raise_for_status()
+            payload = resp.json()
+            if payload.get("status") != 200:
+                last_error = RuntimeError(f"FinMind 回傳錯誤：{payload.get('msg')}")
+                # 額度用盡時 FinMind 常在 status/msg 裡回傳文字錯誤而非 HTTP 429，同樣視為
+                # 可重試的情況，而不是直接視為資料集本身有問題。
+                time.sleep(backoff)
+                backoff *= 2
+                continue
+            time.sleep(self.request_interval_sec)  # 每次成功請求後固定間隔，避免累積超過額度
+            return pd.DataFrame(payload["data"])
+
+        raise last_error or RuntimeError(f"FinMind 請求重試 {self.max_retries} 次後仍失敗：{dataset}")
 
     def get_price_history(self, tickers: list[str], start: str, end: str) -> pd.DataFrame:
         rows = []
@@ -80,14 +111,31 @@ class FinMindDataSource(DataSource):
         raw = self._request(_DATASET_MONTH_REVENUE, ticker, buffer_start, end)
         if raw.empty:
             return pd.DataFrame(columns=["date", "ticker", "revenue_yoy"])
+        raw = raw.dropna(subset=["revenue_year", "revenue_month", "revenue"]).copy()
+        raw["revenue_year"] = raw["revenue_year"].astype(int)
+        raw["revenue_month"] = raw["revenue_month"].astype(int)
         raw = raw.sort_values(["revenue_year", "revenue_month"])
-        raw["revenue_yoy"] = raw["revenue"].pct_change(12)
-        # 公告可用日：抓 FinMind 給的 date 欄（通常已是公告日），沒有的話用月底 + 10 天概估。
-        announce_date = pd.to_datetime(raw.get("date", None))
-        if announce_date.isna().all():
-            announce_date = pd.to_datetime(
-                raw["revenue_year"].astype(str) + "-" + raw["revenue_month"].astype(str) + "-01"
-            ) + pd.DateOffset(months=1, days=10)
+
+        # 用 (年,月) 對齊算 YoY，而非 pct_change(12)：後者假設每年剛好 12 列無缺漏，
+        # 中間若有月份沒回傳資料，pct_change(12) 會用位置對齊，YoY 會錯位到別的月份。
+        revenue_by_period = raw.set_index(["revenue_year", "revenue_month"])["revenue"]
+
+        def _yoy(row) -> float:
+            prev = revenue_by_period.get((row["revenue_year"] - 1, row["revenue_month"]))
+            if prev is None or prev == 0:
+                return float("nan")
+            return row["revenue"] / prev - 1
+
+        raw["revenue_yoy"] = raw.apply(_yoy, axis=1)
+
+        # 公告可用日：跨 session 實測（見 RESEARCH_HANDOFF.md）發現 FinMind 的 date 欄實際上是
+        # 「營收所屬月份的次月 1 日」（例如 2330 的 date=2023-01-01 對應
+        # revenue_year=2022, revenue_month=12），比台股規定「次月 10 日前公布」最多早 9 天，
+        # 直接拿來當公告可用日會有前視偏誤風險。因此不信任 date 欄，一律用
+        # 「營收所屬月份 + 1 個月 + 10 天」估計最保守的公告可用日。
+        announce_date = pd.to_datetime(
+            raw["revenue_year"].astype(str) + "-" + raw["revenue_month"].astype(str) + "-01"
+        ) + pd.DateOffset(months=1, days=10)
         out = pd.DataFrame({"date": announce_date, "ticker": ticker, "revenue_yoy": raw["revenue_yoy"]})
         return out[out["date"] >= start]
 
