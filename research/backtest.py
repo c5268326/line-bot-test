@@ -228,6 +228,10 @@ def build_scores(strategy, when, universe, price, val, revenue):
 # 回測
 # =====================================================================
 def run(strategy, use_stop, price, val, revenue, all_dates, universe):
+    """
+    逐日計算權益曲線。只在換股日取樣的話,季中的回檔會完全看不見,
+    最大回撤與夏普都會嚴重失真 —— 對停損研究來說那等於白做。
+    """
     rebals = rebalance_dates(all_dates)
     date_idx = {d: i for i, d in enumerate(all_dates)}
 
@@ -238,55 +242,82 @@ def run(strategy, use_stop, price, val, revenue, all_dates, universe):
 
     for i, rb in enumerate(rebals):
         end_date = rebals[i + 1] if i + 1 < len(rebals) else all_dates[-1]
+        span = all_dates[date_idx[rb]: date_idx[end_date] + 1]
         picks = [s for s, _ in build_scores(strategy, rb, universe, price, val, revenue)[:TOP_N]]
+
         if not picks:
-            curve.append((end_date, equity))
+            for d in span[1:]:
+                curve.append((d, equity))
             continue
 
         weight = 1.0 / len(picks)
-        period_ret = 0.0
+        base = equity
 
+        # 每檔的持倉狀態;exit_value 為已實現的每元淨值(含賣出成本)
+        pos = {}
         for sid in picks:
-            pser = price[sid]
-            entry = pser[rb]["close"]
-            if not entry or entry <= 0:
-                period_ret += weight        # 拿不到價格就當持平
-                continue
+            entry = price[sid][rb]["close"]
+            pos[sid] = {
+                "entry": entry if entry and entry > 0 else None,
+                "stop": (entry * (1 - STOP_LOSS)) if entry and entry > 0 else None,
+                "exit_value": None, "exit_price": None, "exit_date": None, "stopped": False,
+            }
 
-            stop_price = entry * (1 - STOP_LOSS)
-            exit_price, exit_date, stopped = None, end_date, False
+        for d in span[1:]:
+            port = 0.0
+            for sid, p in pos.items():
+                if p["entry"] is None:
+                    port += weight               # 沒有有效進場價,當作持平
+                    continue
+                if p["exit_value"] is not None:
+                    port += weight * p["exit_value"]   # 已停損,轉持現金
+                    continue
 
-            if use_stop:
-                for d in all_dates[date_idx[rb] + 1: date_idx[end_date] + 1]:
-                    bar = pser.get(d)
-                    if not bar:
-                        continue
-                    low = bar.get("min") or bar.get("close")
-                    if low is not None and low <= stop_price:
-                        # 跳空時以開盤價成交,反映實際無法在停損價出場
+                bar = price[sid].get(d)
+
+                if use_stop and bar:
+                    low = bar.get("min") if bar.get("min") else bar.get("close")
+                    if low is not None and low <= p["stop"]:
+                        # 跳空開低時不可能在停損價成交,取開盤價與停損價的較低者
                         op = bar.get("open") or bar.get("close")
-                        exit_price = min(op, stop_price) if op else stop_price
-                        exit_date, stopped = d, True
+                        fill = min(op, p["stop"]) if op else p["stop"]
+                        p["exit_value"] = (fill / p["entry"]) * (1 - FEE) * (1 - FEE - TAX)
+                        p["exit_price"], p["exit_date"], p["stopped"] = fill, d, True
                         stop_hits += 1
-                        break
+                        port += weight * p["exit_value"]
+                        continue
 
-            if exit_price is None:
-                last = latest_on_or_before(pser, end_date)
-                exit_price = last["close"] if last else entry
+                if bar:
+                    px = bar["close"]
+                else:
+                    last = latest_on_or_before(price[sid], d)   # 停牌沿用最後價格
+                    px = last["close"] if last else p["entry"]
+                port += weight * (px / p["entry"]) * (1 - FEE)  # 未實現,只扣買進成本
 
-            gross = exit_price / entry
-            net = gross * (1 - FEE) * (1 - FEE - TAX)     # 買進與賣出成本
-            period_ret += weight * net
+            curve.append((d, base * port))
+
+        # 期末結算尚未停損的部位
+        final = 0.0
+        for sid, p in pos.items():
+            if p["entry"] is None:
+                final += weight
+                continue
+            if p["exit_value"] is None:
+                last = latest_on_or_before(price[sid], end_date)
+                exit_price = last["close"] if last else p["entry"]
+                p["exit_value"] = (exit_price / p["entry"]) * (1 - FEE) * (1 - FEE - TAX)
+                p["exit_price"], p["exit_date"] = exit_price, end_date
+            final += weight * p["exit_value"]
 
             trades.append({
                 "strategy": strategy, "stop": use_stop, "stock": sid,
-                "entry_date": rb, "exit_date": exit_date,
-                "entry": round(entry, 2), "exit": round(exit_price, 2),
-                "ret": round(net - 1, 4), "stopped": stopped,
+                "entry_date": rb, "exit_date": p["exit_date"],
+                "entry": round(p["entry"], 2), "exit": round(p["exit_price"], 2),
+                "ret": round(p["exit_value"] - 1, 4), "stopped": p["stopped"],
             })
 
-        equity *= period_ret
-        curve.append((end_date, equity))
+        equity = base * final
+        curve[-1] = (end_date, equity)
 
     return equity, curve, trades, stop_hits
 
@@ -394,8 +425,9 @@ def main():
                 strat, use_stop, price, val, revenue, all_dates, universe)
             m = metrics(curve, trades, hits)
             results["strategies"][strat][key] = m
+            # 曲線改存每週一點,檔案才不會爆掉(指標仍以逐日資料計算)
             results["strategies"][strat][key + "_curve"] = [
-                {"d": d, "v": round(v, 4)} for d, v in curve]
+                {"d": d, "v": round(v, 4)} for d, v in curve[::5]]
             print(f"{STRATEGY_LABEL[strat]:24} {'含20%停損' if use_stop else '無停損  '}"
                   f"  總報酬 {m['total_return'] * 100:+8.1f}%"
                   f"  年化 {m['cagr'] * 100:+6.2f}%"
@@ -408,7 +440,65 @@ def main():
     with open(out, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, separators=(",", ":"))
     print(f"已寫入 {out}({os.path.getsize(out) / 1024:.0f} KB)", flush=True)
+
+    write_report(results)
     return 0
+
+
+def pct(v, digits=1):
+    return "—" if v is None else f"{v * 100:+.{digits}f}%"
+
+
+def write_report(res):
+    """輸出人可讀的 markdown 報告"""
+    c = res["config"]
+    L = []
+    L.append("# 台股五策略回測結果\n")
+    L.append(f"回測期間 **{c['start']} ~ {c['end']}**,"
+             f"universe {c['universe_size']} 檔,每季換股,等權持有 {c['top_n']} 檔。\n")
+
+    b = res.get("benchmark") or {}
+    if b:
+        L.append(f"對照組 **{b['id']} 買進持有**:總報酬 {pct(b.get('total_return'))}、"
+                 f"年化 {pct(b.get('cagr'), 2)}、最大回撤 {pct(b.get('max_drawdown'))}\n")
+
+    L.append("\n## 總覽\n")
+    L.append("| 策略 | 停損 | 總報酬 | 年化 | 最大回撤 | 夏普 | 勝率 | 停損觸發率 |")
+    L.append("|---|---|---:|---:|---:|---:|---:|---:|")
+    for _, s in res["strategies"].items():
+        for key, label in (("no_stop", "無"), ("with_stop", "20%")):
+            m = s.get(key) or {}
+            L.append(
+                f"| {s['label']} | {label} | {pct(m.get('total_return'))} | "
+                f"{pct(m.get('cagr'), 2)} | {pct(m.get('max_drawdown'))} | "
+                f"{m.get('sharpe') if m.get('sharpe') is not None else '—'} | "
+                f"{pct(m.get('win_rate')) if m.get('win_rate') is not None else '—'} | "
+                f"{pct(m.get('stop_rate')) if m.get('stop_rate') is not None else '—'} |")
+
+    L.append("\n## 停損的影響\n")
+    L.append("| 策略 | 無停損年化 | 含停損年化 | 差異 | 回撤改善 |")
+    L.append("|---|---:|---:|---:|---:|")
+    for _, s in res["strategies"].items():
+        a, bb = s.get("no_stop") or {}, s.get("with_stop") or {}
+        if a.get("cagr") is None or bb.get("cagr") is None:
+            continue
+        d = bb["cagr"] - a["cagr"]
+        dd = (bb.get("max_drawdown") or 0) - (a.get("max_drawdown") or 0)
+        L.append(f"| {s['label']} | {pct(a['cagr'], 2)} | {pct(bb['cagr'], 2)} | "
+                 f"{d * 100:+.2f}pp | {dd * 100:+.1f}pp |")
+
+    L.append("\n## 必須知道的限制\n")
+    L.append("- **倖存者偏誤**:universe 以「今天」的成交金額前 N 檔回頭選股,"
+             "下市與長期萎縮的公司完全不在樣本中,所有報酬數字都因此偏高。\n")
+    L.append("- **交易成本**已計入手續費 0.1425% 雙邊與賣出證交稅 0.3%,未給券商折扣;"
+             "但**未計入滑價與流動性衝擊**,高週轉策略的實際報酬會再低一些。\n")
+    L.append("- **未計入股利**:報酬僅為價格報酬,高股息策略因此被系統性低估。\n")
+    L.append("- 回測是對歷史的描述,不是對未來的預測,更不是投資建議。\n")
+
+    path = os.path.join(OUT_DIR, "report.md")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("\n".join(L) + "\n")
+    print(f"已寫入 {path}", flush=True)
 
 
 if __name__ == "__main__":
