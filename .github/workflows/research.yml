@@ -15,6 +15,10 @@ on:
         description: "universe 檔數"
         required: false
         default: "120"
+      years:
+        description: "只抓指定年份(逗號分隔,留空為全部)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -41,6 +45,7 @@ jobs:
           ONLY_DATASETS: ${{ inputs.only_datasets }}
           UNIVERSE_SIZE: ${{ inputs.universe_size }}
           FINMIND_PACE: "2.0"
+          YEARS: ${{ inputs.years }}
         run: python "research/${{ inputs.script }}"
 
       - name: 提交產出結果
