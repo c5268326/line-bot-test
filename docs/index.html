@@ -390,7 +390,7 @@ dialog::backdrop { background: rgba(16,23,37,.45); }
   <div class="statusbar-in">
     <div class="sb-id">TW·SIGNAL<span>/</span>STATION</div>
     <div class="sb-right">
-      <span class="sb-item"><span class="dot-live is-static" id="sb-dot"></span><span id="sb-source">資料來源 載入中</span></span>
+      <span class="sb-item"><span class="dot-live is-static" id="sb-dot"></span><span id="sb-source">載入中</span></span>
       <span class="sb-item">最新交易日 <b class="num" id="sb-date">—</b></span>
       <span class="sb-item">監測 <b class="num" id="sb-count">0</b> 檔</span>
     </div>
@@ -995,11 +995,26 @@ function demoSets() {
    由 GitHub Actions 排程執行 fetch_stocks.py 產生後 commit。
    格式見 data/README.md。抓不到時靜默退回示範資料。
    ========================================================= */
+function readInlineFeed() {
+  // Artifact 受 CSP 限制無法 fetch 任何檔案,所以發布時會把資料直接
+  // 內嵌成一個 JSON script 標籤。有內嵌就優先採用,不必連外。
+  const el = document.getElementById("seed-stocks");
+  if (!el || !el.textContent.trim()) return null;
+  try {
+    return JSON.parse(el.textContent);
+  } catch (e) {
+    return null;
+  }
+}
+
 async function loadFeed() {
   try {
-    const res = await fetch("data/stocks.json", { cache: "no-store" });
-    if (!res.ok) return null;
-    const j = await res.json();
+    let j = readInlineFeed();
+    if (!j) {
+      const res = await fetch("data/stocks.json", { cache: "no-store" });
+      if (!res.ok) return null;
+      j = await res.json();
+    }
     if (!j || !Array.isArray(j.stocks) || !j.stocks.length) return null;
     const sets = [];
     for (const s of j.stocks) {
@@ -1015,7 +1030,8 @@ async function loadFeed() {
       });
     }
     if (!sets.length) return null;
-    return { updatedAt: j.updated_at || null, source: j.source || null, sets };
+    return { updatedAt: j.updated_at || null, source: j.source || null,
+             asOf: j.as_of || null, sets };
   } catch (e) {
     return null;   // 靜態託管時檔案還不存在,屬正常情況
   }
@@ -1130,7 +1146,7 @@ const arrow = v => v > 0 ? "▲" : v < 0 ? "▼" : "＝";
 const mdy = s => s ? s.slice(5).replace("-", "/") : "—";
 const scoreTxt = v => (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const SRC_LABEL = { live: "即時", demo: "示範", manual: "手動" };
+const SRC_LABEL = { live: "實際", demo: "示範", manual: "手動" };
 
 /* =========================================================
    9. 檢測站
@@ -1203,7 +1219,7 @@ function renderStats() {
   const latest = dates.length ? dates[dates.length - 1] : null;
 
   document.getElementById("statstrip").innerHTML = `
-    <div class="stat"><div class="lbl">監測標的</div><div class="stat-v">${rows.length}</div><div class="stat-sub">${rows.filter(r => r.src === "live").length} 檔即時 ・ ${rows.filter(r => r.src === "demo").length} 檔示範</div></div>
+    <div class="stat"><div class="lbl">監測標的</div><div class="stat-v">${rows.length}</div><div class="stat-sub">${rows.filter(r => r.src === "live").length} 檔實際行情 ・ ${rows.filter(r => r.src === "demo").length} 檔示範</div></div>
     <div class="stat"><div class="lbl">偏多</div><div class="stat-v up">${bull}</div><div class="stat-sub">診斷分數 ≥ +2</div></div>
     <div class="stat"><div class="lbl">偏空</div><div class="stat-v down">${bear}</div><div class="stat-sub">診斷分數 ≤ −2</div></div>
     <div class="stat"><div class="lbl">觸發訊號</div><div class="stat-v">${alerts}</div><div class="stat-sub">近 3 個交易日內</div></div>
@@ -1218,8 +1234,10 @@ function renderStatusSource() {
   const txt = document.getElementById("sb-source");
   if (state.feed) {
     dot.classList.remove("is-static");
-    const t = state.feed.updatedAt ? String(state.feed.updatedAt).replace("T", " ").slice(0, 16) : "";
-    txt.textContent = `即時資料${t ? " ・ 更新於 " + t : ""}`;
+    const src = state.feed.source || "實際行情";
+    const asOf = state.feed.asOf ? state.feed.asOf.replace(/-/g, "/") : null;
+    // 這是有明確截止日的快照,不是即時報價,標示必須誠實
+    txt.textContent = `${src}${asOf ? " ・ 收盤資料至 " + asOf : ""}`;
   } else {
     dot.classList.add("is-static");
     txt.textContent = "示範資料 ・ 尚未接上行情來源";
@@ -1816,7 +1834,7 @@ window.addEventListener("resize", () => {
 
   const feed = await loadFeed();
   if (feed) {
-    state.feed = { updatedAt: feed.updatedAt, source: feed.source };
+    state.feed = { updatedAt: feed.updatedAt, source: feed.source, asOf: feed.asOf };
     state.datasets = [...feed.sets, ...state.datasets];
   }
   if (!state.datasets.length) state.datasets = demoSets();
