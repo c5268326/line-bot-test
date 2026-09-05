@@ -1,10 +1,17 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>台股訊號檢測站</title>
+<meta name="description" content="台股技術訊號掃描:均線、RSI、MACD、KD、布林通道全自動計算,標出當日觸發的技術訊號。">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23111827'/%3E%3Cpath d='M5 22 L12 15 L17 19 L27 8' stroke='%2300A3C4' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
 
 <style>
-/* ---------- reset ---------- */
+/* ================= reset ================= */
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; }
@@ -12,352 +19,429 @@ img { max-width: 100%; }
 [hidden] { display: none !important; }
 button, input, textarea, select { font: inherit; color: inherit; }
 
-/* ---------- tokens: light ---------- */
+/* ================= tokens =================
+   刻意採用單一淺色主題:不隨系統深色模式翻轉,
+   但每個顏色都明確指定,所以放在深色底的宿主頁面上也不會透出來。 */
 :root {
   color-scheme: light;
-  --ground:      #F5F4F0;
+
+  --ground:      #ECEFF4;
+  --dot:         #D3D9E3;
   --surface:     #FFFFFF;
-  --surface-2:   #FAF9F5;
-  --surface-3:   #EFEDE6;
-  --ink:         #1B1A17;
-  --ink-2:       #4A4740;
-  --ink-muted:   #6E6A62;
-  --rule:        #E3DFD6;
-  --rule-strong: #CFC9BC;
-  --accent:      #1F3A5F;
-  --accent-soft: #E8EDF4;
-  --up:          #C62828;
-  --up-soft:     #FBEAE8;
-  --down:        #1B7F5A;
-  --down-soft:   #E5F3ED;
-  --neutral-chip:#EDEAE2;
+  --surface-2:   #F5F7FA;
+  --surface-3:   #E8ECF2;
+
+  /* 四階文字灰:最淺的 --ink-faint 對每個底色都仍有 4.6:1 以上對比 */
+  --ink:         #101725;
+  --ink-2:       #3C4658;
+  --ink-muted:   #4F5A6B;
+  --ink-faint:   #5E6979;
+  --ink-deco:    #9AA3B2;   /* 只用於非文字的裝飾線條 */
+
+  --rule:        #DFE4EC;
+  --rule-strong: #C3CAD6;
+
+  --chrome:      #111827;   /* 頂部狀態列與主要按鈕 */
+  --chrome-2:    #1D2637;
+  --on-chrome:   #E8ECF3;
+
+  --live:        #00A3C4;   /* 唯一的鮮豔色:即時、focus、十字線 */
+  --live-soft:   #E0F5F9;
+
+  --up:          #C62828;   /* 台股慣例:紅漲 */
+  --up-soft:     #FCEAE8;
+  --down:        #1B7F5A;   /* 綠跌 */
+  --down-soft:   #E4F3ED;
+
   --ma-fast:     #2563C9;
   --ma-mid:      #B77400;
   --ma-slow:     #7A4FC0;
-  --grid:        #EAE7DF;
-  --band:        #F2F0E9;
-  --shadow:      0 1px 2px rgba(27,26,23,.05), 0 8px 24px rgba(27,26,23,.05);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --ground:      #151513;
-    --surface:     #1D1D1A;
-    --surface-2:   #232320;
-    --surface-3:   #2B2B27;
-    --ink:         #EDEAE3;
-    --ink-2:       #C3BFB6;
-    --ink-muted:   #98938A;
-    --rule:        #33322D;
-    --rule-strong: #46443D;
-    --accent:      #8FB4DE;
-    --accent-soft: #22303E;
-    --up:          #F0574C;
-    --up-soft:     #38211F;
-    --down:        #35B98A;
-    --down-soft:   #17302A;
-    --neutral-chip:#2E2D29;
-    --ma-fast:     #4E8AE0;
-    --ma-mid:      #C0871F;
-    --ma-slow:     #9670D0;
-    --grid:        #2A2A26;
-    --band:        #232320;
-    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.28);
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --ground:      #151513;
-  --surface:     #1D1D1A;
-  --surface-2:   #232320;
-  --surface-3:   #2B2B27;
-  --ink:         #EDEAE3;
-  --ink-2:       #C3BFB6;
-  --ink-muted:   #98938A;
-  --rule:        #33322D;
-  --rule-strong: #46443D;
-  --accent:      #8FB4DE;
-  --accent-soft: #22303E;
-  --up:          #F0574C;
-  --up-soft:     #38211F;
-  --down:        #35B98A;
-  --down-soft:   #17302A;
-  --neutral-chip:#2E2D29;
-  --ma-fast:     #4E8AE0;
-  --ma-mid:      #C0871F;
-  --ma-slow:     #9670D0;
-  --grid:        #2A2A26;
-  --band:        #232320;
-  --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.28);
+
+  --grid:        #E9EDF3;
+  --band:        #F2F5F9;
+
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "IBM Plex Sans", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
 }
 
-/* ---------- base ---------- */
+/* ================= base ================= */
 body {
-  background: var(--ground);
+  background-color: var(--ground);
+  background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+  background-size: 22px 22px;
   color: var(--ink);
-  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  font-family: var(--sans);
   font-size: 15px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
-.num { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
-.shell { max-width: 1240px; margin: 0 auto; padding: 22px 20px 64px; }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.shell { max-width: 1320px; margin: 0 auto; padding: 20px 20px 60px; }
+:focus-visible { outline: 2px solid var(--live); outline-offset: 2px; }
 
-/* ---------- topbar ---------- */
-.topbar {
-  display: flex; flex-wrap: wrap; gap: 18px 24px;
+/* 小標籤:全站共用的技術感 label */
+.lbl {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 500;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--ink-muted);
+}
+
+/* ================= 頂部狀態列 ================= */
+.statusbar {
+  background: var(--chrome); color: var(--on-chrome);
+  display: flex; flex-wrap: wrap; gap: 8px 20px;
+  align-items: center; justify-content: space-between;
+  padding: 9px 20px; font-family: var(--mono); font-size: 11.5px; letter-spacing: .06em;
+}
+.statusbar-in { max-width: 1320px; margin: 0 auto; width: 100%; display: flex; flex-wrap: wrap; gap: 6px 20px; align-items: center; justify-content: space-between; }
+.sb-id { font-weight: 600; letter-spacing: .16em; }
+.sb-id span { color: var(--live); }
+.sb-right { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; color: #9AA5B6; }
+.sb-item { display: inline-flex; align-items: center; gap: 7px; }
+.sb-item b { color: var(--on-chrome); font-weight: 500; }
+.dot-live {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--live); flex: none;
+  box-shadow: 0 0 0 0 rgba(0,163,196,.6); animation: pulse 2.4s ease-out infinite;
+}
+.dot-live.is-static { animation: none; background: var(--ink-faint); box-shadow: none; }
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(0,163,196,.55); }
+  70%  { box-shadow: 0 0 0 7px rgba(0,163,196,0); }
+  100% { box-shadow: 0 0 0 0 rgba(0,163,196,0); }
+}
+
+/* ================= 標題區 ================= */
+.masthead {
+  display: flex; flex-wrap: wrap; gap: 16px 24px;
   align-items: flex-end; justify-content: space-between;
-  padding-bottom: 16px; border-bottom: 2px solid var(--ink);
+  padding: 22px 0 16px;
 }
-.brand h1 {
-  font-family: "Noto Serif TC", Georgia, serif;
-  font-weight: 700; font-size: 27px; line-height: 1.25;
-  margin: 0 0 4px; letter-spacing: .01em; text-wrap: balance;
-}
-.brand .tagline { margin: 0; color: var(--ink-muted); font-size: 13.5px; max-width: 56ch; }
-.topbar-actions { display: flex; gap: 8px; }
+.masthead h1 { font-size: 26px; font-weight: 700; letter-spacing: -.01em; margin: 5px 0 5px; line-height: 1.2; }
+.masthead p { margin: 0; color: var(--ink-muted); font-size: 13.5px; max-width: 60ch; }
+.mh-actions { display: flex; gap: 8px; }
 
-/* ---------- buttons ---------- */
+/* ================= 按鈕 ================= */
 .btn {
-  border: 1px solid var(--rule-strong); background: var(--surface);
-  color: var(--ink); border-radius: 3px; padding: 7px 14px;
-  font-size: 13.5px; font-weight: 500; cursor: pointer;
-  transition: background .12s, border-color .12s, color .12s;
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink);
+  border-radius: 2px; padding: 8px 15px; font-size: 13.5px; font-weight: 500; cursor: pointer;
+  transition: background .12s ease, border-color .12s ease, color .12s ease, transform .08s ease;
 }
-.btn:hover { background: var(--surface-3); border-color: var(--ink-muted); }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
-:root[data-theme="dark"] .btn-primary,
-:root:not([data-theme="light"]) .btn-primary { color: var(--ground); }
-@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .btn-primary { color: #fff; } }
-.btn-primary:hover { filter: brightness(1.12); background: var(--accent); border-color: var(--accent); }
-.btn-ghost { background: transparent; border-color: transparent; color: var(--ink-muted); padding: 4px 8px; }
-.btn-ghost:hover { background: var(--surface-3); color: var(--ink); border-color: transparent; }
-.btn-sm { padding: 4px 10px; font-size: 12.5px; }
-
-/* ---------- view tabs ---------- */
-.viewtabs { display: flex; gap: 2px; margin: 0 0 20px; border-bottom: 1px solid var(--rule); }
-.viewtabs button {
-  border: none; background: none; cursor: pointer; padding: 11px 16px 9px;
-  font-size: 14.5px; font-weight: 500; color: var(--ink-muted);
-  border-bottom: 3px solid transparent; margin-bottom: -1px;
+.btn:hover { border-color: var(--ink-muted); background: var(--surface-2); }
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--chrome); border-color: var(--chrome); color: #fff; }
+.btn-primary:hover { background: var(--chrome-2); border-color: var(--chrome-2); }
+.btn-sm { padding: 5px 11px; font-size: 12.5px; }
+.btn-icon {
+  border: 1px solid transparent; background: none; color: var(--ink-faint);
+  padding: 3px 8px; border-radius: 2px; cursor: pointer; font-size: 13px; line-height: 1.4;
+  transition: color .12s ease, background .12s ease;
 }
-.viewtabs button:hover { color: var(--ink); }
-.viewtabs button.is-active { color: var(--ink); border-bottom-color: var(--accent); font-weight: 700; }
+.btn-icon:hover { color: var(--up); background: var(--up-soft); }
 
-/* ---------- stat strip ---------- */
+/* ================= 分頁 ================= */
+.tabs { display: flex; gap: 0; border-bottom: 1px solid var(--rule); margin-bottom: 18px; }
+.tabs button {
+  border: none; background: none; cursor: pointer; padding: 10px 18px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+  font-weight: 500; color: var(--ink-muted); border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: color .12s ease, border-color .12s ease;
+}
+.tabs button:hover { color: var(--ink); }
+.tabs button.is-active { color: var(--ink); border-bottom-color: var(--live); font-weight: 600; }
+
+/* ================= 統計條 ================= */
 .statstrip {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 1px; background: var(--rule); border: 1px solid var(--rule);
-  border-radius: 4px; overflow: hidden; margin-bottom: 20px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(146px, 1fr));
+  gap: 1px; background: var(--rule); border: 1px solid var(--rule); margin-bottom: 16px;
 }
-.stat { background: var(--surface); padding: 13px 16px; }
-.stat-k {
-  font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
-  color: var(--ink-muted); font-weight: 500; margin-bottom: 3px;
-}
-.stat-v { font-size: 22px; font-weight: 700; line-height: 1.15; }
-.stat-sub { font-size: 12px; color: var(--ink-muted); margin-top: 1px; }
+.stat { background: var(--surface); padding: 12px 16px; }
+.stat-v { font-family: var(--mono); font-size: 23px; font-weight: 600; line-height: 1.2; margin-top: 3px; }
+.stat-sub { font-size: 11.5px; color: var(--ink-faint); margin-top: 1px; }
 
-/* ---------- table ---------- */
-.tablewrap {
-  overflow-x: auto; background: var(--surface);
-  border: 1px solid var(--rule); border-radius: 4px; box-shadow: var(--shadow);
+/* ================= 篩選列 ================= */
+.filterbar {
+  display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
+  background: var(--surface); border: 1px solid var(--rule); border-bottom: none;
+  padding: 10px 14px;
 }
-table.scan { width: 100%; border-collapse: collapse; min-width: 860px; }
+.search {
+  position: relative; display: flex; align-items: center; gap: 7px;
+  border: 1px solid var(--rule-strong); background: var(--surface-2);
+  border-radius: 2px; padding: 5px 10px; min-width: 190px;
+  transition: border-color .12s ease, background .12s ease;
+}
+.search:focus-within { border-color: var(--live); background: var(--surface); }
+.search svg { flex: none; color: var(--ink-deco); }
+.search input { border: none; background: none; outline: none; width: 100%; font-size: 13.5px; }
+.chipfilters { display: flex; gap: 5px; flex-wrap: wrap; }
+.fchip {
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink-muted);
+  padding: 4px 11px; border-radius: 2px; cursor: pointer;
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .05em; font-weight: 500;
+  transition: all .12s ease;
+}
+.fchip:hover { color: var(--ink); border-color: var(--ink-muted); }
+.fchip.is-on { background: var(--chrome); border-color: var(--chrome); color: #fff; }
+.filter-count { margin-left: auto; font-family: var(--mono); font-size: 11.5px; color: var(--ink-faint); }
+
+/* ================= 表格 ================= */
+.tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--rule); }
+table.scan { width: 100%; border-collapse: collapse; min-width: 940px; }
 table.scan th {
-  text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--ink-muted); font-weight: 600; padding: 10px 14px;
-  border-bottom: 1px solid var(--rule-strong); white-space: nowrap; background: var(--surface-2);
+  text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule-strong);
+  background: var(--surface-2); white-space: nowrap;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink-muted); font-weight: 500;
 }
-table.scan th.sortable { cursor: pointer; user-select: none; }
+table.scan th.sortable { cursor: pointer; user-select: none; transition: color .12s ease; }
 table.scan th.sortable:hover { color: var(--ink); }
-table.scan th .arrow { opacity: .45; font-size: 9px; margin-left: 3px; }
-table.scan td { padding: 11px 14px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
-table.scan tbody tr { cursor: pointer; }
-table.scan tbody tr:hover { background: var(--surface-2); }
+table.scan th .arrow { color: var(--live); font-size: 9px; margin-left: 4px; }
+table.scan td { padding: 10px 14px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+table.scan tbody tr {
+  cursor: pointer; position: relative;
+  transition: background .12s ease, box-shadow .12s ease;
+}
+table.scan tbody tr:hover { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--live); }
 table.scan tbody tr:last-child td { border-bottom: none; }
 .t-right { text-align: right; }
-.sym-name { font-weight: 700; font-size: 14.5px; }
-.sym-meta { font-size: 11.5px; color: var(--ink-muted); }
+.sym-name { font-weight: 600; font-size: 14.5px; letter-spacing: -.005em; }
+.sym-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; font-size: 11.5px; color: var(--ink-faint); }
 .px { font-size: 15px; font-weight: 500; }
 .up { color: var(--up); }
 .down { color: var(--down); }
 .flat { color: var(--ink-muted); }
+.spark { display: block; width: 92px; height: 28px; }
 
-/* ---------- verdict bar (diverging) ---------- */
+/* 來源標記 */
+.src {
+  font-family: var(--mono); font-size: 9.5px; letter-spacing: .09em; text-transform: uppercase;
+  padding: 1px 5px; border: 1px solid; border-radius: 2px; font-weight: 500;
+}
+.src-live { color: var(--live); border-color: #9FDCE8; background: var(--live-soft); }
+.src-demo { color: var(--ink-muted); border-color: var(--rule-strong); background: var(--surface-2); }
+.src-manual { color: var(--ma-slow); border-color: #D3C3ED; background: #F4EFFC; }
+
+/* 診斷條 */
 .verdict { display: flex; align-items: center; gap: 9px; }
-.vbar { position: relative; width: 96px; height: 15px; background: var(--surface-3); border-radius: 2px; flex: none; }
+.vbar { position: relative; width: 88px; height: 16px; background: var(--surface-3); flex: none; }
 .vbar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--rule-strong); }
-.vfill { position: absolute; top: 2px; bottom: 2px; border-radius: 1px; }
-.vlabel { font-size: 12.5px; font-weight: 700; white-space: nowrap; min-width: 3.6em; }
+.vfill { position: absolute; top: 3px; bottom: 3px; transition: width .2s ease; }
+.vlabel { font-size: 12.5px; font-weight: 600; white-space: nowrap; min-width: 3.4em; }
 
-/* ---------- signal chips ---------- */
-.chips { display: flex; flex-wrap: wrap; gap: 4px; max-width: 420px; }
+/* 訊號 chip */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; max-width: 400px; }
 .chip {
-  font-size: 11.5px; line-height: 1.5; padding: 2px 7px; border-radius: 3px;
-  white-space: nowrap; font-weight: 500; border: 1px solid transparent;
+  font-size: 11.5px; line-height: 1.55; padding: 2px 7px; border-radius: 2px;
+  white-space: nowrap; font-weight: 500; border: 1px solid;
 }
-.chip-up { background: var(--up-soft); color: var(--up); border-color: color-mix(in srgb, var(--up) 22%, transparent); }
-.chip-down { background: var(--down-soft); color: var(--down); border-color: color-mix(in srgb, var(--down) 22%, transparent); }
-.chip-neutral { background: var(--neutral-chip); color: var(--ink-2); border-color: var(--rule); }
-.chip-demo { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
-.chip-age { opacity: .72; font-weight: 400; }
-.chip-none { font-size: 12.5px; color: var(--ink-muted); }
+.chip-up { background: var(--up-soft); color: var(--up); border-color: #EFC5C0; }
+.chip-down { background: var(--down-soft); color: var(--down); border-color: #B9DDCE; }
+.chip-neutral { background: var(--surface-2); color: var(--ink-2); border-color: var(--rule-strong); }
+.chip-age { opacity: .7; font-weight: 400; }
+.chip-none { font-size: 12.5px; color: var(--ink-faint); }
 
-/* ---------- detail view ---------- */
-.detail-bar {
-  display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center;
-  justify-content: space-between; margin-bottom: 14px;
-}
+/* ================= 個股分析 ================= */
+.detail-bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .picker { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .picker select {
   background: var(--surface); border: 1px solid var(--rule-strong); color: var(--ink);
-  border-radius: 3px; padding: 6px 10px; font-size: 14px; font-weight: 500; cursor: pointer;
+  border-radius: 2px; padding: 6px 10px; font-size: 14px; font-weight: 500; cursor: pointer;
+  transition: border-color .12s ease;
 }
+.picker select:hover { border-color: var(--ink-muted); }
 .togglerow { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
 .toggle {
   border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink-muted);
-  border-radius: 3px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; font-weight: 500;
+  border-radius: 2px; padding: 4px 10px; cursor: pointer; font-weight: 500;
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .05em;
+  transition: all .12s ease;
 }
-.toggle:hover { color: var(--ink); }
-.toggle.is-on { background: var(--accent); border-color: var(--accent); color: var(--surface); }
-:root[data-theme="dark"] .toggle.is-on,
-:root:not([data-theme="light"]) .toggle.is-on { color: var(--ground); }
-@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .toggle.is-on { color: #fff; } }
-.togglegroup-label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted); font-weight: 600; margin-right: 2px; }
+.toggle:hover { color: var(--ink); border-color: var(--ink-muted); }
+.toggle.is-on { background: var(--chrome); border-color: var(--chrome); color: #fff; }
 
-.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; box-shadow: var(--shadow); }
-.card-head {
+.panel { background: var(--surface); border: 1px solid var(--rule); }
+/* HUD 角標:只給主控台,不是每個框都有 */
+.console { position: relative; }
+.console::before, .console::after {
+  content: ""; position: absolute; width: 9px; height: 9px; border: 1.5px solid var(--live); pointer-events: none;
+}
+.console::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+.console::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+
+.panel-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-  padding: 13px 16px 11px; border-bottom: 1px solid var(--rule);
+  padding: 11px 15px; border-bottom: 1px solid var(--rule);
 }
-.card-title { font-family: "Noto Serif TC", Georgia, serif; font-weight: 600; font-size: 16px; margin: 0; }
-.card-note { font-size: 12px; color: var(--ink-muted); }
-.card-body { padding: 16px; }
+.panel-title { font-size: 14.5px; font-weight: 600; margin: 0; }
+.panel-note { font-family: var(--mono); font-size: 11px; color: var(--ink-faint); }
+.panel-body { padding: 15px; }
 
-/* readout strip */
-.readout {
-  display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--rule);
-  background: var(--surface-2); padding: 4px 6px;
-}
-.ro { padding: 6px 12px; min-width: 84px; }
-.ro-k { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-muted); font-weight: 600; }
-.ro-v { font-size: 14px; font-weight: 500; line-height: 1.35; }
-.ro-date .ro-v { font-weight: 700; }
+/* 讀值列 */
+.readout { display: flex; flex-wrap: wrap; background: var(--surface-2); border-bottom: 1px solid var(--rule); padding: 3px 5px; }
+.ro { padding: 6px 12px; min-width: 82px; }
+.ro-k { font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 500; }
+.ro-v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 14px; font-weight: 500; line-height: 1.35; }
+.ro-date .ro-v { font-weight: 600; }
+.ro-cursor { margin-left: auto; text-align: right; }
+.ro-cursor .ro-v { color: var(--live); font-size: 11.5px; letter-spacing: .06em; }
+.ro-cursor.is-latest .ro-v { color: var(--ink-faint); }
 
-.chart-host { padding: 6px 4px 2px; }
+.chart-host { padding: 5px 3px 0; }
 .chart-host svg { display: block; width: 100%; height: auto; }
-.legendrow { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 16px 12px; border-top: 1px solid var(--rule); }
-.lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-muted); }
-.lg i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; flex: none; }
+.chart-host svg:focus-visible { outline: 2px solid var(--live); outline-offset: -2px; }
+.legendrow { display: flex; flex-wrap: wrap; gap: 13px; padding: 9px 15px 11px; border-top: 1px solid var(--rule); }
+.lg { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink-muted); }
+.lg i { width: 14px; height: 3px; display: inline-block; flex: none; }
+.hintkey {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-faint);
+  border: 1px solid var(--rule-strong); border-radius: 2px; padding: 0 4px; background: var(--surface-2);
+}
 
-/* svg chart classes */
+/* SVG 圖表 */
 .c-grid { stroke: var(--grid); stroke-width: 1; }
 .c-axis { stroke: var(--rule-strong); stroke-width: 1; }
-.c-txt { fill: var(--ink-muted); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10.5px; }
-.c-txt-lbl { fill: var(--ink-muted); font-family: "Noto Sans TC", sans-serif; font-size: 11px; font-weight: 600; }
+.c-txt { fill: var(--ink-faint); font-family: var(--mono); font-size: 10px; }
+.c-lbl { fill: var(--ink-muted); font-family: var(--mono); font-size: 10px; letter-spacing: .09em; text-transform: uppercase; }
 .c-band { fill: var(--band); }
 .c-up { fill: var(--up); stroke: var(--up); }
 .c-down { fill: var(--down); stroke: var(--down); }
 .c-ma-fast { stroke: var(--ma-fast); fill: none; stroke-width: 1.6; stroke-linejoin: round; }
 .c-ma-mid  { stroke: var(--ma-mid);  fill: none; stroke-width: 1.6; stroke-linejoin: round; }
 .c-ma-slow { stroke: var(--ma-slow); fill: none; stroke-width: 1.6; stroke-linejoin: round; }
-.c-boll { stroke: var(--ink-muted); fill: none; stroke-width: 1; stroke-dasharray: 3 3; opacity: .75; }
-.c-boll-fill { fill: var(--ink-muted); opacity: .07; }
+.c-boll { stroke: var(--ink-deco); fill: none; stroke-width: 1; stroke-dasharray: 3 3; }
+.c-boll-fill { fill: var(--ink-deco); opacity: .12; }
 .c-ref { stroke: var(--rule-strong); stroke-width: 1; stroke-dasharray: 2 3; }
-.c-cross { stroke: var(--ink); stroke-width: 1; opacity: .5; pointer-events: none; }
+.c-cross { stroke: var(--live); stroke-width: 1; pointer-events: none; }
+.c-crossdot { fill: var(--live); pointer-events: none; }
 .c-hit { fill: transparent; }
 .c-panelbg { fill: var(--surface-2); }
+.c-evmark { pointer-events: none; }
 
-/* detail grid */
-.detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 16px; margin-top: 16px; align-items: start; }
-@media (max-width: 860px) { .detail-grid { grid-template-columns: 1fr; } }
+/* 指標 / 訊號 */
+.detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 14px; margin-top: 14px; align-items: start; }
+@media (max-width: 900px) { .detail-grid { grid-template-columns: 1fr; } }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(126px, 1fr)); gap: 14px 18px; }
+.metric-v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 17px; font-weight: 600; line-height: 1.25; margin-top: 2px; }
+.metric-s { font-size: 11.5px; color: var(--ink-faint); }
 
-.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 14px 18px; }
-.metric-k { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-muted); font-weight: 600; }
-.metric-v { font-size: 17px; font-weight: 700; line-height: 1.25; }
-.metric-s { font-size: 11.5px; color: var(--ink-muted); }
-
-.evlist { display: flex; flex-direction: column; }
-.ev { display: grid; grid-template-columns: 84px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--rule); align-items: start; }
+.evlist { display: flex; flex-direction: column; max-height: 336px; overflow-y: auto; }
+.ev {
+  display: grid; grid-template-columns: 72px 1fr; gap: 12px; padding: 8px 10px;
+  border-bottom: 1px dashed var(--rule); align-items: start; cursor: pointer;
+  border-left: 2px solid transparent; margin: 0 -10px;
+  transition: background .12s ease, border-color .12s ease;
+}
+.ev:hover { background: var(--surface-2); border-left-color: var(--live); }
+.ev.is-active { background: var(--live-soft); border-left-color: var(--live); }
 .ev:last-child { border-bottom: none; }
-.ev-d { font-size: 12.5px; color: var(--ink-muted); padding-top: 1px; }
-.ev-b { display: flex; flex-direction: column; gap: 2px; }
+.ev-d { font-family: var(--mono); font-size: 12px; color: var(--ink-muted); padding-top: 1px; }
 .ev-t { font-size: 13.5px; font-weight: 500; }
-.ev-x { font-size: 12px; color: var(--ink-muted); }
-.ev-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
-.scrolly { max-height: 340px; overflow-y: auto; }
+.ev-x { font-size: 11.5px; color: var(--ink-faint); margin-top: 1px; }
+.ev-dot { display: inline-block; width: 7px; height: 7px; margin-right: 7px; vertical-align: 1px; }
 
-/* AI panel */
-.ai-out { font-size: 14px; line-height: 1.75; white-space: pre-wrap; margin-top: 12px; color: var(--ink-2); }
+.ai-out { font-size: 14px; line-height: 1.8; white-space: pre-wrap; margin-top: 12px; color: var(--ink-2); }
 .ai-out:empty { display: none; }
-.ai-hint { font-size: 12.5px; color: var(--ink-muted); }
+.hint { font-size: 12.5px; color: var(--ink-faint); }
 
-/* banner */
 .banner {
-  display: flex; gap: 10px; align-items: baseline; padding: 10px 14px; border-radius: 4px;
-  background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
-  font-size: 13px; color: var(--ink-2); margin-bottom: 16px;
+  display: flex; gap: 10px; align-items: baseline; padding: 9px 13px;
+  background: var(--surface); border: 1px solid var(--rule-strong); border-left: 3px solid var(--live);
+  font-size: 13px; color: var(--ink-2); margin-bottom: 14px;
 }
-.banner b { color: var(--accent); }
+.banner b { color: var(--ink); }
 
-/* dialogs */
+/* ================= 對話框 ================= */
 dialog {
-  border: 1px solid var(--rule-strong); border-radius: 5px; background: var(--surface); color: var(--ink);
-  padding: 0; max-width: 640px; width: calc(100% - 32px); box-shadow: 0 18px 60px rgba(0,0,0,.28);
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink);
+  padding: 0; max-width: 660px; width: calc(100% - 32px); border-radius: 2px;
+  box-shadow: 0 20px 70px rgba(16,23,37,.3);
 }
-dialog::backdrop { background: rgba(20,19,16,.42); }
-.dlg-head { padding: 16px 20px 12px; border-bottom: 1px solid var(--rule); }
-.dlg-head h2 { font-family: "Noto Serif TC", Georgia, serif; font-size: 18px; margin: 0 0 3px; font-weight: 600; }
+dialog::backdrop { background: rgba(16,23,37,.45); }
+.dlg-head { padding: 15px 20px 12px; border-bottom: 1px solid var(--rule); }
+.dlg-head h2 { font-size: 17px; margin: 4px 0 3px; font-weight: 600; }
 .dlg-head p { margin: 0; font-size: 13px; color: var(--ink-muted); }
 .dlg-body { padding: 16px 20px; max-height: 62vh; overflow-y: auto; }
 .dlg-foot { padding: 12px 20px 16px; border-top: 1px solid var(--rule); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .field { margin-bottom: 14px; }
-.field label { display: block; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-muted); font-weight: 600; margin-bottom: 5px; }
+.field > label { display: block; margin-bottom: 5px; font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); font-weight: 500; }
 .field input[type=text], .field input[type=number], .field textarea {
-  width: 100%; background: var(--surface-2); border: 1px solid var(--rule-strong); border-radius: 3px;
-  padding: 8px 10px; font-size: 14px;
+  width: 100%; background: var(--surface-2); border: 1px solid var(--rule-strong);
+  border-radius: 2px; padding: 8px 10px; font-size: 14px; transition: border-color .12s ease, background .12s ease;
 }
-.field textarea { min-height: 168px; resize: vertical; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; line-height: 1.55; white-space: pre; }
-.field .hint { font-size: 12px; color: var(--ink-muted); margin-top: 5px; }
-.fmt { background: var(--surface-2); border: 1px solid var(--rule); border-radius: 3px; padding: 10px 12px; font-size: 12px; color: var(--ink-muted); }
-.fmt code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11.5px; color: var(--ink-2); display: block; white-space: pre; overflow-x: auto; margin-top: 6px; }
-.parambox { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 16px; }
+.field input:focus, .field textarea:focus { outline: none; border-color: var(--live); background: var(--surface); }
+.field textarea { min-height: 168px; resize: vertical; font-family: var(--mono); font-size: 12.5px; line-height: 1.55; white-space: pre; }
+.fmt { background: var(--surface-2); border: 1px solid var(--rule); padding: 10px 12px; font-size: 12px; color: var(--ink-muted); }
+.fmt code { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); display: block; white-space: pre; overflow-x: auto; margin-top: 6px; }
+.parambox { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 12px 16px; }
 .err { color: var(--up); font-size: 13px; margin-top: 8px; font-weight: 500; }
 .err:empty { display: none; }
 
-/* footer */
-.foot { margin-top: 34px; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 12px; color: var(--ink-muted); display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between; }
+.foot {
+  margin-top: 30px; padding-top: 14px; border-top: 1px solid var(--rule);
+  font-size: 12px; color: var(--ink-faint);
+  display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between;
+}
 
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; animation: none !important; } }
 </style>
+</head>
+<body>
+
+<div class="statusbar">
+  <div class="statusbar-in">
+    <div class="sb-id">TW·SIGNAL<span>/</span>STATION</div>
+    <div class="sb-right">
+      <span class="sb-item"><span class="dot-live is-static" id="sb-dot"></span><span id="sb-source">資料來源 載入中</span></span>
+      <span class="sb-item">最新交易日 <b class="num" id="sb-date">—</b></span>
+      <span class="sb-item">監測 <b class="num" id="sb-count">0</b> 檔</span>
+    </div>
+  </div>
+</div>
 
 <div class="shell">
-  <header class="topbar">
-    <div class="brand">
+  <header class="masthead">
+    <div>
+      <div class="lbl">技術訊號掃描 ・ 日線</div>
       <h1>台股訊號檢測站</h1>
-      <p class="tagline">貼上日線資料,自動算出均線、RSI、MACD、KD 與布林通道,並標出當日觸發的技術訊號。紅漲綠跌依台股慣例。</p>
+      <p>均線、RSI、MACD、KD 與布林通道全自動計算,標出每檔標的當日觸發的技術訊號。紅漲綠跌依台股慣例。</p>
     </div>
-    <div class="topbar-actions">
-      <button class="btn" id="btn-settings">參數設定</button>
+    <div class="mh-actions">
+      <button class="btn" id="btn-settings">參數</button>
       <button class="btn btn-primary" id="btn-import">載入資料</button>
     </div>
   </header>
 
-  <nav class="viewtabs" id="viewtabs">
+  <nav class="tabs" id="tabs">
     <button data-view="scan" class="is-active">檢測站</button>
     <button data-view="detail">個股分析</button>
   </nav>
 
-  <!-- ============ SCAN VIEW ============ -->
+  <!-- ============ 檢測站 ============ -->
   <section id="view-scan">
     <div class="statstrip" id="statstrip"></div>
+
+    <div class="filterbar">
+      <div class="search">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10.5 10.5 L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <input type="search" id="q" placeholder="搜尋標的名稱或代號" autocomplete="off" aria-label="搜尋標的">
+      </div>
+      <div class="chipfilters" id="chipfilters">
+        <button class="fchip is-on" data-filter="all">全部</button>
+        <button class="fchip" data-filter="bull">偏多</button>
+        <button class="fchip" data-filter="bear">偏空</button>
+        <button class="fchip" data-filter="signal">有訊號</button>
+      </div>
+      <span class="filter-count" id="filter-count"></span>
+    </div>
+
     <div class="tablewrap">
       <table class="scan">
         <thead>
           <tr>
             <th class="sortable" data-sort="name">標的<span class="arrow"></span></th>
+            <th>近 30 日</th>
             <th class="sortable t-right" data-sort="close">收盤<span class="arrow"></span></th>
             <th class="sortable t-right" data-sort="chg">漲跌<span class="arrow"></span></th>
             <th class="t-right">量能</th>
@@ -369,86 +453,87 @@ dialog::backdrop { background: rgba(20,19,16,.42); }
         <tbody id="scan-body"></tbody>
       </table>
     </div>
-    <p class="ai-hint" style="margin-top:10px">點任一列可切換到個股分析。訊號以最新一根日K為準,括號內為觸發距今天數。</p>
+    <p class="hint" style="margin-top:9px">點任一列進入個股分析。訊號以最新一根日 K 為準,標註為觸發距今的交易日數。</p>
   </section>
 
-  <!-- ============ DETAIL VIEW ============ -->
+  <!-- ============ 個股分析 ============ -->
   <section id="view-detail" hidden>
     <div id="demo-banner" class="banner" hidden>
       <b>示範資料</b>
-      <span>這檔是內建的模擬走勢,用來展示指標與訊號的運作方式,並非任何真實個股的行情。按「載入資料」貼上你自己的日線後即可分析實際標的。</span>
+      <span>這檔是內建的模擬走勢,用來展示指標與訊號的運作方式,並非任何真實個股的行情。</span>
     </div>
 
     <div class="detail-bar">
       <div class="picker">
-        <label for="sel-symbol" class="togglegroup-label">標的</label>
+        <label for="sel-symbol" class="lbl">標的</label>
         <select id="sel-symbol"></select>
       </div>
       <div class="togglerow">
-        <span class="togglegroup-label">期間</span>
-        <button class="toggle" data-range="60">60日</button>
-        <button class="toggle" data-range="120">120日</button>
-        <button class="toggle" data-range="250">250日</button>
-        <button class="toggle" data-range="0">全部</button>
+        <span class="lbl">期間</span>
+        <button class="toggle" data-range="60">60D</button>
+        <button class="toggle" data-range="120">120D</button>
+        <button class="toggle" data-range="250">250D</button>
+        <button class="toggle" data-range="0">ALL</button>
       </div>
       <div class="togglerow">
-        <span class="togglegroup-label">面板</span>
-        <button class="toggle" data-panel="boll">布林</button>
-        <button class="toggle" data-panel="vol">成交量</button>
+        <span class="lbl">面板</span>
+        <button class="toggle" data-panel="boll">BOLL</button>
+        <button class="toggle" data-panel="vol">VOL</button>
         <button class="toggle" data-panel="rsi">RSI</button>
         <button class="toggle" data-panel="macd">MACD</button>
         <button class="toggle" data-panel="kd">KD</button>
       </div>
     </div>
 
-    <div class="card">
+    <div class="panel console">
       <div class="readout" id="readout"></div>
       <div class="chart-host" id="chart-host"></div>
       <div class="legendrow" id="legendrow"></div>
     </div>
 
     <div class="detail-grid">
-      <div class="card">
-        <div class="card-head">
-          <h3 class="card-title">指標現值</h3>
-          <span class="card-note" id="metrics-date"></span>
+      <div class="panel">
+        <div class="panel-head">
+          <h3 class="panel-title">指標現值</h3>
+          <span class="panel-note" id="metrics-date"></span>
         </div>
-        <div class="card-body"><div class="metrics" id="metrics"></div></div>
+        <div class="panel-body"><div class="metrics" id="metrics"></div></div>
       </div>
-      <div class="card">
-        <div class="card-head">
-          <h3 class="card-title">訊號紀錄</h3>
-          <span class="card-note" id="events-note"></span>
+      <div class="panel">
+        <div class="panel-head">
+          <h3 class="panel-title">訊號紀錄</h3>
+          <span class="panel-note" id="events-note"></span>
         </div>
-        <div class="card-body"><div class="evlist scrolly" id="events"></div></div>
+        <div class="panel-body"><div class="evlist" id="events"></div></div>
       </div>
     </div>
 
-    <div class="card" id="ai-card" style="margin-top:16px" hidden>
-      <div class="card-head">
-        <h3 class="card-title">技術面摘要</h3>
-        <span class="card-note">由 Claude 依上方算出的指標數值撰寫</span>
+    <div class="panel" id="ai-card" style="margin-top:14px" hidden>
+      <div class="panel-head">
+        <h3 class="panel-title">技術面摘要</h3>
+        <span class="panel-note">由 Claude 依上方指標數值撰寫</span>
       </div>
-      <div class="card-body">
+      <div class="panel-body">
         <button class="btn" id="btn-ai">產生摘要</button>
-        <p class="ai-hint" style="margin:8px 0 0">摘要只描述指標目前的狀態,不提供買賣建議。</p>
+        <p class="hint" style="margin:8px 0 0">只描述指標目前的狀態,不提供買賣建議。</p>
         <div class="ai-out" id="ai-out"></div>
       </div>
     </div>
   </section>
 
   <footer class="foot">
-    <span>本頁所有指標皆在瀏覽器內計算,資料不會離開這個頁面。</span>
+    <span>指標皆在瀏覽器內計算,手動貼上的資料不會離開這個頁面。</span>
     <span>技術指標為歷史價量的數學運算結果,不構成投資建議。</span>
   </footer>
 </div>
 
-<!-- ============ IMPORT DIALOG ============ -->
+<!-- ============ 載入資料 ============ -->
 <dialog id="dlg-import">
   <form method="dialog">
     <div class="dlg-head">
+      <div class="lbl">Import</div>
       <h2>載入日線資料</h2>
-      <p>從券商、Yahoo 股市或證交所複製整段表格貼進來即可,欄位順序會自動判讀。</p>
+      <p>從券商、Yahoo 股市或證交所複製整段表格貼進來,欄位順序會自動判讀。</p>
     </div>
     <div class="dlg-body">
       <div class="field">
@@ -461,9 +546,9 @@ dialog::backdrop { background: rgba(20,19,16,.42); }
         <div class="err" id="in-err"></div>
       </div>
       <div class="fmt">
-        認得的格式:有標題列時依欄名對應(日期／開盤價／最高價／最低價／收盤價／成交股數,中英皆可);沒有標題列時預設為
+        有標題列時依欄名對應(日期／開盤價／最高價／最低價／收盤價／成交股數,中英皆可);沒有標題列時預設為
         <code>日期, 開, 高, 低, 收, 量</code>
-        也接受只有「日期, 收盤價」兩欄。民國年(115/08/01)、千分位逗號、Tab 分隔、證交所的「--」空值都會自動處理。至少需要 30 筆才算得出季線。
+        也接受只有「日期, 收盤價」兩欄。民國年(115/08/01)、千分位逗號、Tab 分隔、證交所的「--」空值都會自動處理。至少需要 30 筆。
       </div>
       <div style="margin-top:14px">
         <button type="button" class="btn btn-sm" id="btn-demo">重新載入示範資料</button>
@@ -476,10 +561,11 @@ dialog::backdrop { background: rgba(20,19,16,.42); }
   </form>
 </dialog>
 
-<!-- ============ SETTINGS DIALOG ============ -->
+<!-- ============ 參數 ============ -->
 <dialog id="dlg-settings">
   <form method="dialog">
     <div class="dlg-head">
+      <div class="lbl">Parameters</div>
       <h2>檢測參數</h2>
       <p>調整後所有標的會立刻重新計算。</p>
     </div>
@@ -494,7 +580,7 @@ dialog::backdrop { background: rgba(20,19,16,.42); }
         <div class="field"><label for="p-volMult">爆量倍數</label><input type="number" id="p-volMult" min="1.2" max="6" step="0.1"></div>
         <div class="field"><label for="p-bias">乖離警戒 %</label><input type="number" id="p-bias" min="3" max="40" step="1"></div>
       </div>
-      <p class="ai-hint">MACD 固定為 12/26/9,KD 固定為 9 日 RSV 搭配 3 日平滑,布林通道為 20 日 ±2 個標準差,皆為台股常用設定。</p>
+      <p class="hint">MACD 固定 12/26/9,KD 固定 9 日 RSV 搭配 3 日平滑,布林通道 20 日 ±2 個標準差,皆為台股常用設定。</p>
     </div>
     <div class="dlg-foot">
       <button type="button" class="btn" id="btn-reset-params">回復預設</button>
@@ -507,26 +593,30 @@ dialog::backdrop { background: rgba(20,19,16,.42); }
 "use strict";
 
 /* =========================================================
-   1. 參數與狀態
+   1. 狀態
    ========================================================= */
 const DEFAULTS = { maFast: 5, maMid: 20, maSlow: 60, rsiLen: 14, rsiHi: 70, rsiLo: 30, volMult: 2, bias: 10 };
 
 const state = {
   params: { ...DEFAULTS },
-  datasets: [],        // {id, name, demo, note, bars:[{d,o,h,l,c,v}]}
-  analysis: {},        // id -> analysis
+  datasets: [],        // {id, name, src:'live'|'demo'|'manual', note, bars}
+  analysis: {},
   view: "scan",
   selected: null,
   range: 120,
   panels: { boll: false, vol: true, rsi: true, macd: true, kd: true },
   sort: { key: "score", dir: -1 },
-  hoverIdx: null
+  filter: "all",
+  query: "",
+  hoverIdx: null,
+  activeEvent: null,
+  feed: null           // data/stocks.json 的中繼資料
 };
 
 const storage = { mode: "memory", db: null };
 
 /* =========================================================
-   2. 數學工具與技術指標
+   2. 技術指標
    ========================================================= */
 function sma(src, p) {
   const out = new Array(src.length).fill(null);
@@ -619,7 +709,7 @@ const crossUp = (a, b, i) => i > 0 && a[i - 1] != null && b[i - 1] != null && a[
 const crossDn = (a, b, i) => i > 0 && a[i - 1] != null && b[i - 1] != null && a[i] != null && b[i] != null && a[i - 1] >= b[i - 1] && a[i] < b[i];
 
 /* =========================================================
-   3. 訊號檢測
+   3. 訊號
    ========================================================= */
 const SIG = {
   maGolden:  { t: "均線黃金交叉", dir: 1,  w: 2, why: p => `MA${p.maFast} 由下往上穿過 MA${p.maMid}` },
@@ -662,7 +752,6 @@ function analyze(ds, p) {
   const bb = bollinger(closes, 20, 2); ind.bbMid = bb.mid; ind.bbUp = bb.up; ind.bbLo = bb.lo;
   ind.bias = closes.map((c, i) => ind.maMid[i] == null ? null : (c - ind.maMid[i]) / ind.maMid[i] * 100);
 
-  // 每一根 K 棒上的事件
   const events = [];
   const push = (i, key, arg) => {
     const def = SIG[key];
@@ -688,7 +777,6 @@ function analyze(ds, p) {
     }
   }
 
-  // 最新一根的狀態型訊號
   const last = n - 1;
   const stateSigs = [];
   const sPush = (key, arg) => {
@@ -717,7 +805,6 @@ function analyze(ds, p) {
   }
   if (streakLen >= 3) sPush(streakDir > 0 ? "streakUp" : "streakDn", streakLen);
 
-  // 最新訊號 = 最近 3 根 K 棒的事件 + 當日狀態
   const recent = events.filter(e => e.i >= n - 3).map(e => ({ ...e, age: last - e.i }));
   const current = [...recent, ...stateSigs.map(e => ({ ...e, age: 0 }))];
   const score = current.reduce((s, e) => s + e.dir * e.w, 0);
@@ -726,7 +813,7 @@ function analyze(ds, p) {
   const chg = closes[last] - prevClose;
 
   return {
-    id: ds.id, name: ds.name, demo: ds.demo, note: ds.note, bars, ind, events, current, score,
+    id: ds.id, name: ds.name, src: ds.src, note: ds.note, bars, ind, events, current, score,
     last, close: closes[last], chg, chgPct: prevClose ? chg / prevClose * 100 : 0,
     volRatio: ind.volMa[last] ? vols[last] / ind.volMa[last] : null
   };
@@ -800,7 +887,6 @@ function parseSeries(text) {
   let rows = lines.map(l => splitRow(l, useTab)).filter(r => r.length >= 2);
   if (!rows.length) throw new Error("每一列至少要有兩個欄位(日期與收盤價)。");
 
-  // 標題列判讀
   let map = null;
   const first = rows[0];
   if (parseDate(first[0]) == null) {
@@ -852,7 +938,7 @@ function parseSeries(text) {
 }
 
 /* =========================================================
-   5. 示範資料(明確標示,非真實行情)
+   5. 示範資料(模擬走勢,明確標示)
    ========================================================= */
 function mulberry32(a) {
   return function () {
@@ -892,36 +978,60 @@ function makeDemo(id, name, note, seed, start, driftFn, vol, baseVol) {
     const r2 = x => Math.round(x * 100) / 100;
     bars.push({ d: dates[i], o: r2(o), h: r2(hi), l: r2(lo), c: r2(c), v });
   }
-  return { id, name, demo: true, note, bars };
+  return { id, name, src: "demo", note, bars };
 }
 
 function demoSets() {
   return [
-    makeDemo("demo-trend", "示範標的 A", "多頭趨勢", 20260101, 118,
-      t => 0.0016 - 0.0022 * Math.sin(t * 7.5), 0.016, 9200),
-    makeDemo("demo-range", "示範標的 B", "區間盤整", 777001, 46.5,
-      t => -0.0009 * Math.sin(t * 12) + 0.0002, 0.013, 21000),
-    makeDemo("demo-break", "示範標的 C", "高檔轉弱", 424242, 205,
-      t => t < 0.58 ? 0.0019 : -0.0026, 0.019, 5400)
+    makeDemo("demo-trend", "示範標的 A", "多頭趨勢", 20260101, 118, t => 0.0016 - 0.0022 * Math.sin(t * 7.5), 0.016, 9200),
+    makeDemo("demo-range", "示範標的 B", "區間盤整", 777001, 46.5, t => -0.0009 * Math.sin(t * 12) + 0.0002, 0.013, 21000),
+    makeDemo("demo-break", "示範標的 C", "高檔轉弱", 424242, 205, t => t < 0.58 ? 0.0019 : -0.0026, 0.019, 5400)
   ];
 }
 
 /* =========================================================
-   6. 儲存
+   6. 真實資料來源 data/stocks.json
+   ---------------------------------------------------------
+   由 GitHub Actions 排程執行 fetch_stocks.py 產生後 commit。
+   格式見 data/README.md。抓不到時靜默退回示範資料。
    ========================================================= */
-const LS_KEY = "tw-signal-station:v1";
-const MAX_STORED_BARS = 1200;   // 單一文件上限 256 KiB,壓縮後約可放 4000 筆,留足餘裕
-
-// 文件 id 只允許英數與少數符號,所以另外產生,標的名稱存在文件內容裡
-function newId() {
-  return "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+async function loadFeed() {
+  try {
+    const res = await fetch("data/stocks.json", { cache: "no-store" });
+    if (!res.ok) return null;
+    const j = await res.json();
+    if (!j || !Array.isArray(j.stocks) || !j.stocks.length) return null;
+    const sets = [];
+    for (const s of j.stocks) {
+      if (!s || !Array.isArray(s.bars) || s.bars.length < 30) continue;
+      const id = String(s.id || s.symbol || "").trim();
+      if (!id) continue;
+      sets.push({
+        id: "live-" + id.replace(/[^A-Za-z0-9_.\-~:@+]/g, ""),
+        name: s.name ? `${id} ${s.name}` : id,
+        src: "live",
+        note: `${s.bars.length} 筆日線`,
+        bars: unpackBars(s.bars)
+      });
+    }
+    if (!sets.length) return null;
+    return { updatedAt: j.updated_at || null, source: j.source || null, sets };
+  } catch (e) {
+    return null;   // 靜態託管時檔案還不存在,屬正常情況
+  }
 }
 
-// 存檔時把物件陣列壓成純陣列,體積約少一半
+/* =========================================================
+   7. 儲存
+   ========================================================= */
+const LS_KEY = "tw-signal-station:v2";
+const MAX_STORED_BARS = 1200;
+
+const newId = () => "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const packBars = bars => bars.slice(-MAX_STORED_BARS).map(b => [b.d, b.o, b.h, b.l, b.c, b.v]);
 const unpackBars = rows => rows.map(r => Array.isArray(r)
   ? { d: r[0], o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] }
-  : r);
+  : { d: r.d, o: +r.o, h: +r.h, l: +r.l, c: +r.c, v: +r.v });
 
 async function initStorage() {
   try { localStorage.getItem(LS_KEY); storage.mode = "local"; } catch (e) { storage.mode = "memory"; }
@@ -929,7 +1039,7 @@ async function initStorage() {
   try {
     const db = await window.claude.use("db");
     if (db) { storage.db = db; storage.mode = "db"; }
-  } catch (e) { /* 沒有 db 就繼續用本機 */ }
+  } catch (e) { /* 沒有 db 就用本機 */ }
 }
 
 function saveLocal() {
@@ -937,9 +1047,10 @@ function saveLocal() {
   try {
     localStorage.setItem(LS_KEY, JSON.stringify({
       params: state.params, panels: state.panels, range: state.range,
-      datasets: state.datasets.filter(d => !d.demo).map(d => ({ id: d.id, name: d.name, note: d.note, rows: packBars(d.bars) }))
+      datasets: state.datasets.filter(d => d.src === "manual")
+        .map(d => ({ id: d.id, name: d.name, note: d.note, rows: packBars(d.bars) }))
     }));
-  } catch (e) { /* 空間不足就略過,db 仍是主要來源 */ }
+  } catch (e) { /* 空間不足 */ }
 }
 
 function readLocal() {
@@ -950,7 +1061,7 @@ function readLocal() {
     if (Array.isArray(o.datasets)) {
       o.datasets = o.datasets
         .filter(d => d && Array.isArray(d.rows) && d.rows.length >= 30)
-        .map(d => ({ id: d.id, name: d.name, demo: false, note: d.note || "", bars: unpackBars(d.rows) }));
+        .map(d => ({ id: d.id, name: d.name, src: "manual", note: d.note || "", bars: unpackBars(d.rows) }));
     }
     return o;
   } catch (e) { return null; }
@@ -959,28 +1070,23 @@ function readLocal() {
 async function persist() {
   saveLocal();
   if (!storage.db) return;
-  try {
-    await storage.db.doc("station/settings").set({ params: state.params, panels: state.panels, range: state.range });
-  } catch (e) { /* 唯讀檢視或暫時無法連線 */ }
+  try { await storage.db.doc("station/settings").set({ params: state.params, panels: state.panels, range: state.range }); }
+  catch (e) { /* 唯讀 */ }
 }
 
 async function persistDataset(ds) {
   saveLocal();
   if (!storage.db) return true;
   try {
-    await storage.db.doc("datasets/" + ds.id).set({
-      name: ds.name, note: ds.note || "", rows: packBars(ds.bars), addedAt: Date.now()
-    });
+    await storage.db.doc("datasets/" + ds.id).set({ name: ds.name, note: ds.note || "", rows: packBars(ds.bars), addedAt: Date.now() });
     return true;
-  } catch (e) {
-    return false;
-  }
+  } catch (e) { return false; }
 }
 
 async function removePersisted(id) {
   saveLocal();
   if (!storage.db) return;
-  try { await storage.db.doc("datasets/" + id).delete(); } catch (e) { /* 唯讀檢視 */ }
+  try { await storage.db.doc("datasets/" + id).delete(); } catch (e) { /* 唯讀 */ }
 }
 
 async function hydrateFromDb() {
@@ -994,29 +1100,27 @@ async function hydrateFromDb() {
       if (s.panels) { state.panels = { ...state.panels, ...s.panels }; changed = true; }
       if (typeof s.range === "number") { state.range = s.range; changed = true; }
     }
-  } catch (e) { /* 沒有設定就用預設 */ }
-
+  } catch (e) { /* 無設定 */ }
   try {
     const qs = await storage.db.collection("datasets").get();
     const loaded = [];
     for (const doc of qs.docs) {
       const data = doc.data();
       if (!data || !Array.isArray(data.rows) || data.rows.length < 30) continue;
-      loaded.push({ id: doc.id, name: String(data.name || doc.id), demo: false, note: data.note || "", bars: unpackBars(data.rows) });
+      loaded.push({ id: doc.id, name: String(data.name || doc.id), src: "manual", note: data.note || "", bars: unpackBars(data.rows) });
     }
     if (loaded.length) {
-      state.datasets = [...loaded, ...state.datasets.filter(d => d.demo)];
+      state.datasets = [...loaded, ...state.datasets.filter(d => d.src !== "manual")];
       changed = true;
     } else {
-      // 雲端還是空的:把本機既有的資料推上去
-      for (const ds of state.datasets.filter(d => !d.demo)) await persistDataset(ds);
+      for (const ds of state.datasets.filter(d => d.src === "manual")) await persistDataset(ds);
     }
-  } catch (e) { /* 沒有資料集就維持現況 */ }
+  } catch (e) { /* 無資料 */ }
   return changed;
 }
 
 /* =========================================================
-   7. 格式化
+   8. 格式化
    ========================================================= */
 const nf = (v, d = 2) => v == null || !Number.isFinite(v) ? "—" : v.toLocaleString("zh-TW", { minimumFractionDigits: d, maximumFractionDigits: d });
 const nfInt = v => v == null || !Number.isFinite(v) ? "—" : Math.round(v).toLocaleString("zh-TW");
@@ -1026,23 +1130,34 @@ const arrow = v => v > 0 ? "▲" : v < 0 ? "▼" : "＝";
 const mdy = s => s ? s.slice(5).replace("-", "/") : "—";
 const scoreTxt = v => (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const SRC_LABEL = { live: "即時", demo: "示範", manual: "手動" };
 
 /* =========================================================
-   8. 檢測站畫面
+   9. 檢測站
    ========================================================= */
 function recomputeAll() {
   state.analysis = {};
   for (const ds of state.datasets) {
-    try { state.analysis[ds.id] = analyze(ds, state.params); }
-    catch (e) { /* 資料太短就略過 */ }
+    try { state.analysis[ds.id] = analyze(ds, state.params); } catch (e) { /* 資料太短 */ }
   }
   if (!state.selected || !state.analysis[state.selected]) {
     state.selected = state.datasets.length ? state.datasets[0].id : null;
   }
 }
 
+function passesFilter(r) {
+  if (state.query) {
+    const q = state.query.toLowerCase();
+    if (!r.name.toLowerCase().includes(q)) return false;
+  }
+  if (state.filter === "bull") return r.score >= 2;
+  if (state.filter === "bear") return r.score <= -2;
+  if (state.filter === "signal") return r.current.length > 0;
+  return true;
+}
+
 function sortedRows() {
-  const rows = state.datasets.map(d => state.analysis[d.id]).filter(Boolean);
+  const rows = state.datasets.map(d => state.analysis[d.id]).filter(Boolean).filter(passesFilter);
   const { key, dir } = state.sort;
   const val = a => key === "name" ? a.name : key === "close" ? a.close : key === "chg" ? a.chgPct : a.score;
   return rows.sort((a, b) => {
@@ -1052,79 +1167,123 @@ function sortedRows() {
   });
 }
 
+// 走勢縮圖:面積填色 + 2px 線 + 強調端點
+function sparkline(bars, days = 30) {
+  const seg = bars.slice(-days);
+  if (seg.length < 2) return "";
+  const cs = seg.map(b => b.c);
+  const lo = Math.min(...cs), hi = Math.max(...cs);
+  const W = 92, H = 28, pad = 3;
+  const span = hi - lo || 1;
+  const x = i => (i / (seg.length - 1)) * (W - 2) + 1;
+  const y = v => H - pad - ((v - lo) / span) * (H - pad * 2);
+  const up = cs[cs.length - 1] >= cs[0];
+  const col = up ? "var(--up)" : "var(--down)";
+  let line = "", area = "";
+  seg.forEach((b, i) => {
+    const px = x(i).toFixed(1), py = y(b.c).toFixed(1);
+    line += (i ? "L" : "M") + px + " " + py + " ";
+    area += (i ? "L" : "M") + px + " " + py + " ";
+  });
+  area += `L${x(seg.length - 1).toFixed(1)} ${H} L${x(0).toFixed(1)} ${H} Z`;
+  const ex = x(seg.length - 1).toFixed(1), ey = y(cs[cs.length - 1]).toFixed(1);
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="近 ${seg.length} 個交易日收盤走勢">
+    <path d="${area}" fill="${col}" opacity="0.1"/>
+    <path d="${line}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${ex}" cy="${ey}" r="2.4" fill="${col}"/>
+  </svg>`;
+}
+
 function renderStats() {
   const rows = Object.values(state.analysis);
   const bull = rows.filter(r => r.score >= 2).length;
   const bear = rows.filter(r => r.score <= -2).length;
+  const alerts = rows.reduce((s, r) => s + r.current.filter(e => e.w > 0).length, 0);
   const dates = rows.map(r => r.bars[r.last].d).sort();
   const latest = dates.length ? dates[dates.length - 1] : null;
-  const alerts = rows.reduce((s, r) => s + r.current.filter(e => e.w > 0).length, 0);
 
   document.getElementById("statstrip").innerHTML = `
-    <div class="stat"><div class="stat-k">監測標的</div><div class="stat-v num">${rows.length}</div><div class="stat-sub">${state.datasets.filter(d => d.demo).length} 檔為示範資料</div></div>
-    <div class="stat"><div class="stat-k">偏多</div><div class="stat-v num up">${bull}</div><div class="stat-sub">診斷分數 ≥ +2</div></div>
-    <div class="stat"><div class="stat-k">偏空</div><div class="stat-v num down">${bear}</div><div class="stat-sub">診斷分數 ≤ −2</div></div>
-    <div class="stat"><div class="stat-k">觸發訊號</div><div class="stat-v num">${alerts}</div><div class="stat-sub">近 3 個交易日內</div></div>
-    <div class="stat"><div class="stat-k">資料截止</div><div class="stat-v num">${latest ? latest.slice(5).replace("-", "/") : "—"}</div><div class="stat-sub">${latest ? latest.slice(0, 4) + " 年" : "尚無資料"}</div></div>`;
+    <div class="stat"><div class="lbl">監測標的</div><div class="stat-v">${rows.length}</div><div class="stat-sub">${rows.filter(r => r.src === "live").length} 檔即時 ・ ${rows.filter(r => r.src === "demo").length} 檔示範</div></div>
+    <div class="stat"><div class="lbl">偏多</div><div class="stat-v up">${bull}</div><div class="stat-sub">診斷分數 ≥ +2</div></div>
+    <div class="stat"><div class="lbl">偏空</div><div class="stat-v down">${bear}</div><div class="stat-sub">診斷分數 ≤ −2</div></div>
+    <div class="stat"><div class="lbl">觸發訊號</div><div class="stat-v">${alerts}</div><div class="stat-sub">近 3 個交易日內</div></div>
+    <div class="stat"><div class="lbl">最新交易日</div><div class="stat-v">${latest ? mdy(latest) : "—"}</div><div class="stat-sub">${latest ? latest.slice(0, 4) : "尚無資料"}</div></div>`;
+
+  document.getElementById("sb-count").textContent = rows.length;
+  document.getElementById("sb-date").textContent = latest ? latest.replace(/-/g, "/") : "—";
+}
+
+function renderStatusSource() {
+  const dot = document.getElementById("sb-dot");
+  const txt = document.getElementById("sb-source");
+  if (state.feed) {
+    dot.classList.remove("is-static");
+    const t = state.feed.updatedAt ? String(state.feed.updatedAt).replace("T", " ").slice(0, 16) : "";
+    txt.textContent = `即時資料${t ? " ・ 更新於 " + t : ""}`;
+  } else {
+    dot.classList.add("is-static");
+    txt.textContent = "示範資料 ・ 尚未接上行情來源";
+  }
 }
 
 function chipHtml(e) {
   const cls = e.dir > 0 ? "chip-up" : e.dir < 0 ? "chip-down" : "chip-neutral";
-  const age = e.age > 0 ? `<span class="chip-age"> ${e.age}日前</span>` : "";
+  const age = e.age > 0 ? `<span class="chip-age"> ${e.age}D</span>` : "";
   return `<span class="chip ${cls}" title="${esc(e.why)}">${esc(e.title)}${age}</span>`;
 }
 
 function renderScan() {
   renderStats();
   const rows = sortedRows();
+  const total = Object.keys(state.analysis).length;
+  document.getElementById("filter-count").textContent = `顯示 ${rows.length} / ${total}`;
   const body = document.getElementById("scan-body");
 
   if (!rows.length) {
-    body.innerHTML = `<tr><td colspan="7" style="padding:34px 16px;text-align:center;color:var(--ink-muted)">還沒有任何標的。按右上角「載入資料」貼上日線資料就能開始檢測。</td></tr>`;
+    body.innerHTML = `<tr><td colspan="8" style="padding:36px 16px;text-align:center;color:var(--ink-faint)">${
+      total ? "沒有符合目前篩選條件的標的。" : "還沒有任何標的。按右上角「載入資料」貼上日線資料就能開始檢測。"
+    }</td></tr>`;
     return;
   }
 
   body.innerHTML = rows.map(r => {
     const v = verdict(r.score);
     const pct = Math.max(-1, Math.min(1, r.score / 8));
-    const w = Math.abs(pct) * 48;
-    const fill = pct >= 0
-      ? `left:50%;width:${w}px;background:var(--up)`
-      : `right:50%;width:${w}px;background:var(--down)`;
+    const w = Math.abs(pct) * 44;
+    const fill = pct >= 0 ? `left:50%;width:${w}px;background:var(--up)` : `right:50%;width:${w}px;background:var(--down)`;
     const chips = r.current.length
       ? r.current.slice().sort((a, b) => b.w - a.w).map(chipHtml).join("")
       : `<span class="chip-none">無明顯訊號</span>`;
-    const vr = r.volRatio;
     return `<tr data-id="${esc(r.id)}">
       <td>
         <div class="sym-name">${esc(r.name)}</div>
-        <div class="sym-meta">${r.demo ? `<span class="chip chip-demo">示範資料</span> ` : ""}${esc(r.note || (r.bars.length + " 筆日線"))}</div>
+        <div class="sym-meta"><span class="src src-${r.src}">${SRC_LABEL[r.src]}</span>${esc(r.note || "")}</div>
       </td>
+      <td>${sparkline(r.bars)}</td>
       <td class="t-right num px">${nf(r.close)}</td>
       <td class="t-right num ${dirCls(r.chg)}">${arrow(r.chg)} ${signed(r.chgPct)}%</td>
-      <td class="t-right num">${vr == null ? "—" : nf(vr, 2) + "×"}</td>
+      <td class="t-right num">${r.volRatio == null ? "—" : nf(r.volRatio, 2) + "×"}</td>
       <td>
         <div class="verdict">
           <div class="vbar"><div class="vfill" style="${fill}"></div></div>
           <span class="vlabel ${v.cls}">${v.label}</span>
-          <span class="num" style="font-size:12px;color:var(--ink-muted)">${scoreTxt(r.score)}</span>
+          <span class="num" style="font-size:12px;color:var(--ink-faint)">${scoreTxt(r.score)}</span>
         </div>
       </td>
       <td><div class="chips">${chips}</div></td>
-      <td class="t-right"><button class="btn-ghost btn" data-del="${esc(r.id)}" title="移除這檔標的" aria-label="移除 ${esc(r.name)}">✕</button></td>
+      <td class="t-right">${r.src === "live" ? "" : `<button class="btn-icon" data-del="${esc(r.id)}" title="移除這檔標的" aria-label="移除 ${esc(r.name)}">✕</button>`}</td>
     </tr>`;
   }).join("");
 
   document.querySelectorAll("th.sortable").forEach(th => {
-    const a = th.querySelector(".arrow");
-    a.textContent = state.sort.key === th.dataset.sort ? (state.sort.dir === 1 ? "▲" : "▼") : "";
+    th.querySelector(".arrow").textContent = state.sort.key === th.dataset.sort ? (state.sort.dir === 1 ? "▲" : "▼") : "";
   });
 }
 
 /* =========================================================
-   9. 圖表
+   10. 圖表
    ========================================================= */
-const chartState = { padL: 8, padR: 52, panels: [], n: 0, i0: 0, bw: 0, W: 0, H: 0 };
+const chartState = { padL: 8, padR: 50, panels: [], n: 0, i0: 0, bw: 0, W: 0, H: 0, plotW: 0 };
 
 function visibleSlice(a) {
   const n = a.bars.length;
@@ -1136,11 +1295,11 @@ function buildPanels() {
   const P = [];
   let y = 8;
   const add = (key, h) => { P.push({ key, top: y, h }); y += h + 12; };
-  add("price", 320);
-  if (state.panels.vol) add("vol", 66);
-  if (state.panels.rsi) add("rsi", 86);
-  if (state.panels.macd) add("macd", 86);
-  if (state.panels.kd) add("kd", 86);
+  add("price", 316);
+  if (state.panels.vol) add("vol", 64);
+  if (state.panels.rsi) add("rsi", 84);
+  if (state.panels.macd) add("macd", 84);
+  if (state.panels.kd) add("kd", 84);
   return { panels: P, height: y + 16 };
 }
 
@@ -1186,9 +1345,7 @@ function renderChart() {
   const x = i => padL + (i - i0 + 0.5) * bw;
   const body = a.bars, ind = a.ind;
   let s = "";
-
   const yMake = (p, lo, hi) => v => p.top + p.h - ((v - lo) / (hi - lo)) * p.h;
-
   const linePath = (arr, y) => {
     let d = "", pen = false;
     for (let i = i0; i <= i1; i++) {
@@ -1225,36 +1382,39 @@ function renderChart() {
       const cw = Math.max(1, Math.min(9, bw * 0.62));
       for (let i = i0; i <= i1; i++) {
         const b = body[i];
-        const up = b.c >= b.o;
-        const cls = up ? "c-up" : "c-down";
+        const cls = b.c >= b.o ? "c-up" : "c-down";
         const cx = x(i);
         s += `<line class="${cls}" x1="${cx.toFixed(1)}" y1="${y(b.h).toFixed(1)}" x2="${cx.toFixed(1)}" y2="${y(b.l).toFixed(1)}" stroke-width="1"/>`;
         const y1 = y(Math.max(b.o, b.c)), y2 = y(Math.min(b.o, b.c));
-        s += `<rect class="${cls}" x="${(cx - cw / 2).toFixed(1)}" y="${y1.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1, y2 - y1).toFixed(1)}"${up ? "" : ""}/>`;
+        s += `<rect class="${cls}" x="${(cx - cw / 2).toFixed(1)}" y="${y1.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1, y2 - y1).toFixed(1)}"/>`;
       }
 
       s += `<path class="c-ma-slow" d="${linePath(ind.maSlow, y)}"/>`;
       s += `<path class="c-ma-mid" d="${linePath(ind.maMid, y)}"/>`;
       s += `<path class="c-ma-fast" d="${linePath(ind.maFast, y)}"/>`;
-      s += `<text class="c-txt-lbl" x="${padL + 4}" y="${p.top + 13}">價格 ・ 均線</text>`;
-      p.scale = { lo, hi, y };
+      s += `<text class="c-lbl" x="${padL + 4}" y="${p.top + 13}">Price · MA</text>`;
+
+      // 被點選的訊號:在價格面板標一個記號
+      if (state.activeEvent != null && state.activeEvent >= i0 && state.activeEvent <= i1) {
+        const cx = x(state.activeEvent);
+        s += `<circle class="c-crossdot c-evmark" cx="${cx.toFixed(1)}" cy="${y(body[state.activeEvent].c).toFixed(1)}" r="4"/>`;
+      }
     }
 
     if (p.key === "vol") {
       const [, hiV] = extent([body.map(b => b.v), ind.volMa], i0, i1);
       const y = yMake(p, 0, hiV * 1.08);
-      s += `<rect class="c-panelbg" x="${padL}" y="${p.top}" width="${plotW}" height="${p.h}" rx="2"/>`;
+      s += `<rect class="c-panelbg" x="${padL}" y="${p.top}" width="${plotW}" height="${p.h}"/>`;
       const cw = Math.max(1, Math.min(9, bw * 0.62));
       for (let i = i0; i <= i1; i++) {
         const b = body[i];
         const cls = (i > 0 ? b.c >= body[i - 1].c : b.c >= b.o) ? "c-up" : "c-down";
         const yy = y(b.v);
-        s += `<rect class="${cls}" x="${(x(i) - cw / 2).toFixed(1)}" y="${yy.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1, p.top + p.h - yy).toFixed(1)}" opacity="0.62"/>`;
+        s += `<rect class="${cls}" x="${(x(i) - cw / 2).toFixed(1)}" y="${yy.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1, p.top + p.h - yy).toFixed(1)}" opacity="0.55"/>`;
       }
       s += `<path class="c-ma-mid" d="${linePath(ind.volMa, y)}"/>`;
-      s += `<text class="c-txt-lbl" x="${padL + 4}" y="${p.top + 13}">成交量</text>`;
+      s += `<text class="c-lbl" x="${padL + 4}" y="${p.top + 13}">Volume</text>`;
       s += `<text class="c-txt" x="${padL + plotW + 6}" y="${p.top + 11}">${nfInt(hiV)}</text>`;
-      p.scale = { lo: 0, hi: hiV * 1.08, y };
     }
 
     if (p.key === "rsi") {
@@ -1265,8 +1425,7 @@ function renderChart() {
         s += `<text class="c-txt" x="${padL + plotW + 6}" y="${(y(t) + 3.5).toFixed(1)}">${t}</text>`;
       }
       s += `<path class="c-ma-fast" d="${linePath(ind.rsi, y)}"/>`;
-      s += `<text class="c-txt-lbl" x="${padL + 4}" y="${p.top + 13}">RSI ${state.params.rsiLen}</text>`;
-      p.scale = { lo: 0, hi: 100, y };
+      s += `<text class="c-lbl" x="${padL + 4}" y="${p.top + 13}">RSI ${state.params.rsiLen}</text>`;
     }
 
     if (p.key === "macd") {
@@ -1279,14 +1438,13 @@ function renderChart() {
         const v = ind.hist[i];
         if (v == null) continue;
         const yy = Math.min(y(v), y(0)), hgt = Math.abs(y(v) - y(0));
-        s += `<rect class="${v >= 0 ? "c-up" : "c-down"}" x="${(x(i) - cw / 2).toFixed(1)}" y="${yy.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1, hgt).toFixed(1)}" opacity="0.72"/>`;
+        s += `<rect class="${v >= 0 ? "c-up" : "c-down"}" x="${(x(i) - cw / 2).toFixed(1)}" y="${yy.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1, hgt).toFixed(1)}" opacity="0.68"/>`;
       }
       s += `<path class="c-ma-mid" d="${linePath(ind.dea, y)}"/>`;
       s += `<path class="c-ma-fast" d="${linePath(ind.dif, y)}"/>`;
-      s += `<text class="c-txt-lbl" x="${padL + 4}" y="${p.top + 13}">MACD 12/26/9</text>`;
+      s += `<text class="c-lbl" x="${padL + 4}" y="${p.top + 13}">MACD 12/26/9</text>`;
       s += `<text class="c-txt" x="${padL + plotW + 6}" y="${(p.top + 11).toFixed(1)}">${nf(m, 2)}</text>`;
       s += `<text class="c-txt" x="${padL + plotW + 6}" y="${(p.top + p.h - 2).toFixed(1)}">−${nf(m, 2)}</text>`;
-      p.scale = { lo: -m, hi: m, y };
     }
 
     if (p.key === "kd") {
@@ -1298,31 +1456,30 @@ function renderChart() {
       }
       s += `<path class="c-ma-mid" d="${linePath(ind.d, y)}"/>`;
       s += `<path class="c-ma-fast" d="${linePath(ind.k, y)}"/>`;
-      s += `<text class="c-txt-lbl" x="${padL + 4}" y="${p.top + 13}">KD 9,3,3</text>`;
-      p.scale = { lo: 0, hi: 100, y };
+      s += `<text class="c-lbl" x="${padL + 4}" y="${p.top + 13}">KD 9,3,3</text>`;
     }
   }
 
-  // 日期軸
   const axisY = height - 6;
   const step = Math.max(1, Math.floor(count / 6));
   for (let i = i0; i <= i1; i += step) {
     const cx = x(i);
-    // 靠邊的標籤改變錨點,才不會被裁掉
     const anchor = cx < 24 ? "start" : cx > padL + plotW - 24 ? "end" : "middle";
-    s += `<line class="c-grid" x1="${cx.toFixed(1)}" y1="8" x2="${cx.toFixed(1)}" y2="${height - 20}" opacity="0.55"/>`;
+    s += `<line class="c-grid" x1="${cx.toFixed(1)}" y1="8" x2="${cx.toFixed(1)}" y2="${height - 20}" opacity="0.6"/>`;
     s += `<text class="c-txt" x="${cx.toFixed(1)}" y="${axisY}" text-anchor="${anchor}">${mdy(body[i].d)}</text>`;
   }
 
   s += `<line id="crosshair" class="c-cross" x1="0" y1="8" x2="0" y2="${height - 20}" style="display:none"/>`;
   s += `<rect id="hit" class="c-hit" x="${padL}" y="0" width="${plotW}" height="${height - 18}"/>`;
 
-  host.innerHTML = `<svg viewBox="0 0 ${W} ${height}" width="${W}" height="${height}" role="img" aria-label="${esc(a.name)} 技術線圖">${s}</svg>`;
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${height}" width="${W}" height="${height}" tabindex="0" role="img"
+    aria-label="${esc(a.name)} 技術線圖,可用左右方向鍵移動游標">${s}</svg>`;
 
   const hit = document.getElementById("hit");
   hit.addEventListener("mousemove", onHover);
-  hit.addEventListener("mouseleave", () => { state.hoverIdx = null; updateCrosshair(); renderReadout(); });
+  hit.addEventListener("mouseleave", () => { setHover(null); });
   hit.addEventListener("touchmove", ev => { if (ev.touches[0]) { onHover(ev.touches[0]); ev.preventDefault(); } }, { passive: false });
+  host.querySelector("svg").addEventListener("keydown", onChartKey);
 }
 
 function onHover(ev) {
@@ -1330,10 +1487,25 @@ function onHover(ev) {
   if (!svg) return;
   const r = svg.getBoundingClientRect();
   const px = (ev.clientX - r.left) * (chartState.W / r.width);
-  let idx = Math.floor((px - chartState.padL) / chartState.bw) + chartState.i0;
   const a = state.analysis[state.selected];
+  let idx = Math.floor((px - chartState.padL) / chartState.bw) + chartState.i0;
   idx = Math.max(chartState.i0, Math.min(a.bars.length - 1, idx));
-  if (idx !== state.hoverIdx) { state.hoverIdx = idx; updateCrosshair(); renderReadout(); }
+  if (idx !== state.hoverIdx) setHover(idx);
+}
+
+function onChartKey(ev) {
+  if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+  ev.preventDefault();
+  const a = state.analysis[state.selected];
+  const base = state.hoverIdx == null ? a.last : state.hoverIdx;
+  const next = Math.max(chartState.i0, Math.min(a.bars.length - 1, base + (ev.key === "ArrowRight" ? 1 : -1)));
+  setHover(next);
+}
+
+function setHover(idx) {
+  state.hoverIdx = idx;
+  updateCrosshair();
+  renderReadout();
 }
 
 function updateCrosshair() {
@@ -1346,7 +1518,7 @@ function updateCrosshair() {
 }
 
 /* =========================================================
-   10. 個股分析畫面
+   11. 個股分析
    ========================================================= */
 function renderReadout() {
   const a = state.analysis[state.selected];
@@ -1355,34 +1527,32 @@ function renderReadout() {
   const b = a.bars[i], ind = a.ind;
   const prev = i > 0 ? a.bars[i - 1].c : b.c;
   const chg = b.c - prev, pct = prev ? chg / prev * 100 : 0;
-  const cell = (k, v, cls = "", extra = "") =>
-    `<div class="ro ${extra}"><div class="ro-k">${k}</div><div class="ro-v num ${cls}">${v}</div></div>`;
+  const cell = (k, v, cls = "", extra = "") => `<div class="ro ${extra}"><div class="ro-k">${k}</div><div class="ro-v ${cls}">${v}</div></div>`;
 
   document.getElementById("readout").innerHTML =
-    cell("日期", b.d.replace(/-/g, "/"), "", "ro-date") +
-    cell("開", nf(b.o)) + cell("高", nf(b.h)) + cell("低", nf(b.l)) +
-    cell("收", nf(b.c), dirCls(chg)) +
-    cell("漲跌", `${arrow(chg)} ${signed(chg)} (${signed(pct)}%)`, dirCls(chg)) +
-    cell("量", nfInt(b.v)) +
+    cell("Date", b.d.replace(/-/g, "/"), "", "ro-date") +
+    cell("Open", nf(b.o)) + cell("High", nf(b.h)) + cell("Low", nf(b.l)) +
+    cell("Close", nf(b.c), dirCls(chg)) +
+    cell("Chg", `${arrow(chg)} ${signed(chg)} (${signed(pct)}%)`, dirCls(chg)) +
+    cell("Vol", nfInt(b.v)) +
     cell(`MA${state.params.maFast}`, nf(ind.maFast[i])) +
     cell(`MA${state.params.maMid}`, nf(ind.maMid[i])) +
     cell(`MA${state.params.maSlow}`, nf(ind.maSlow[i])) +
     cell("RSI", nf(ind.rsi[i], 1)) +
-    cell("K / D", `${nf(ind.k[i], 1)} / ${nf(ind.d[i], 1)}`) +
-    cell("MACD 柱", signed(ind.hist[i]), dirCls(ind.hist[i] || 0)) +
-    (state.hoverIdx == null ? "" : `<div class="ro"><div class="ro-k">　</div><div class="ro-v" style="font-size:12px;color:var(--ink-muted)">游標位置</div></div>`);
+    cell("K/D", `${nf(ind.k[i], 1)} / ${nf(ind.d[i], 1)}`) +
+    cell("MACD", signed(ind.hist[i]), dirCls(ind.hist[i] || 0)) +
+    // 這一格永遠存在,hover 時才不會把整列擠成兩行
+    cell("", state.hoverIdx == null ? "最新收盤" : "游標檢視中", "", "ro-cursor" + (state.hoverIdx == null ? " is-latest" : ""));
 }
 
 function renderLegend() {
   const p = state.params;
-  const items = [
-    [`MA${p.maFast}`, "var(--ma-fast)"], [`MA${p.maMid}`, "var(--ma-mid)"], [`MA${p.maSlow}`, "var(--ma-slow)"],
-    ["上漲 / 多方", "var(--up)"], ["下跌 / 空方", "var(--down)"]
-  ];
-  if (state.panels.boll) items.splice(3, 0, ["布林 ±2σ", "var(--ink-muted)"]);
+  const items = [[`MA${p.maFast}`, "var(--ma-fast)"], [`MA${p.maMid}`, "var(--ma-mid)"], [`MA${p.maSlow}`, "var(--ma-slow)"]];
+  if (state.panels.boll) items.push(["布林 ±2σ", "var(--ink-deco)"]);
+  items.push(["上漲 / 多方", "var(--up)"], ["下跌 / 空方", "var(--down)"]);
   document.getElementById("legendrow").innerHTML =
     items.map(([t, c]) => `<span class="lg"><i style="background:${c}"></i>${esc(t)}</span>`).join("") +
-    (state.panels.macd || state.panels.kd ? `<span class="lg" style="opacity:.8">下方面板:快線為藍、慢線為橘</span>` : "");
+    `<span class="lg" style="margin-left:auto">滑鼠移動查看單日數值,點圖後可用 <span class="hintkey">←</span> <span class="hintkey">→</span> 逐日移動</span>`;
 }
 
 function renderMetrics() {
@@ -1401,8 +1571,8 @@ function renderMetrics() {
     ["布林位置", ind.bbUp[i] == null ? "—" : nf((a.close - ind.bbLo[i]) / (ind.bbUp[i] - ind.bbLo[i]) * 100, 0) + "%", "0% 下軌 ・ 100% 上軌"]
   ];
   document.getElementById("metrics").innerHTML = items.map(([k, val, sub]) =>
-    `<div><div class="metric-k">${esc(k)}</div><div class="metric-v num">${val}</div><div class="metric-s">${esc(sub || "")}</div></div>`).join("");
-  document.getElementById("metrics-date").textContent = a.bars[i].d.replace(/-/g, "/") + " 收盤";
+    `<div><div class="lbl">${esc(k)}</div><div class="metric-v">${val}</div><div class="metric-s">${esc(sub || "")}</div></div>`).join("");
+  document.getElementById("metrics-date").textContent = a.bars[i].d.replace(/-/g, "/");
 }
 
 function renderEvents() {
@@ -1410,15 +1580,14 @@ function renderEvents() {
   if (!a) return;
   const { i0 } = visibleSlice(a);
   const list = a.events.filter(e => e.i >= i0 && e.w > 0).slice().reverse().slice(0, 60);
-  const note = document.getElementById("events-note");
-  note.textContent = `期間內 ${list.length} 筆`;
+  document.getElementById("events-note").textContent = `期間內 ${list.length} 筆`;
   const el = document.getElementById("events");
-  if (!list.length) { el.innerHTML = `<p class="ai-hint" style="margin:6px 0">這段期間沒有觸發交叉類訊號。</p>`; return; }
+  if (!list.length) { el.innerHTML = `<p class="hint" style="margin:6px 0">這段期間沒有觸發交叉類訊號。</p>`; return; }
   el.innerHTML = list.map(e => {
     const c = e.dir > 0 ? "var(--up)" : e.dir < 0 ? "var(--down)" : "var(--ink-muted)";
-    return `<div class="ev">
-      <div class="ev-d num">${e.d.slice(5).replace("-", "/")}</div>
-      <div class="ev-b"><div class="ev-t"><span class="ev-dot" style="background:${c}"></span>${esc(e.title)}</div><div class="ev-x">${esc(e.why)}</div></div>
+    return `<div class="ev${state.activeEvent === e.i ? " is-active" : ""}" data-i="${e.i}" role="button" tabindex="0">
+      <div class="ev-d">${mdy(e.d)}</div>
+      <div><div class="ev-t"><span class="ev-dot" style="background:${c}"></span>${esc(e.title)}</div><div class="ev-x">${esc(e.why)}</div></div>
     </div>`;
   }).join("");
 }
@@ -1426,28 +1595,29 @@ function renderEvents() {
 function renderDetail() {
   const sel = document.getElementById("sel-symbol");
   sel.innerHTML = state.datasets.map(d =>
-    `<option value="${esc(d.id)}"${d.id === state.selected ? " selected" : ""}>${esc(d.name)}${d.demo ? "(示範)" : ""}</option>`).join("");
+    `<option value="${esc(d.id)}"${d.id === state.selected ? " selected" : ""}>${esc(d.name)}${d.src === "demo" ? "(示範)" : ""}</option>`).join("");
   const a = state.analysis[state.selected];
-  document.getElementById("demo-banner").hidden = !(a && a.demo);
+  document.getElementById("demo-banner").hidden = !(a && a.src === "demo");
   document.getElementById("ai-out").textContent = "";
   document.querySelectorAll("[data-range]").forEach(b => b.classList.toggle("is-on", +b.dataset.range === state.range));
   document.querySelectorAll("[data-panel]").forEach(b => b.classList.toggle("is-on", !!state.panels[b.dataset.panel]));
-  state.hoverIdx = null;
   if (!a) return;
   renderChart(); renderReadout(); renderLegend(); renderMetrics(); renderEvents();
+  updateCrosshair();
 }
 
 function render() {
   document.getElementById("view-scan").hidden = state.view !== "scan";
   document.getElementById("view-detail").hidden = state.view !== "detail";
-  document.querySelectorAll("#viewtabs button").forEach(b => b.classList.toggle("is-active", b.dataset.view === state.view));
+  document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("is-active", b.dataset.view === state.view));
+  renderStatusSource();
   if (state.view === "scan") renderScan(); else renderDetail();
 }
 
 /* =========================================================
-   11. 事件繫結
+   12. 事件
    ========================================================= */
-document.getElementById("viewtabs").addEventListener("click", ev => {
+document.getElementById("tabs").addEventListener("click", ev => {
   const b = ev.target.closest("button[data-view]");
   if (!b) return;
   state.view = b.dataset.view; render();
@@ -1459,8 +1629,7 @@ document.getElementById("scan-body").addEventListener("click", async ev => {
     ev.stopPropagation();
     const id = del.dataset.del;
     const ds = state.datasets.find(d => d.id === id);
-    if (!ds) return;
-    if (!confirm(`確定要移除「${ds.name}」嗎?`)) return;
+    if (!ds || !confirm(`確定要移除「${ds.name}」嗎?`)) return;
     state.datasets = state.datasets.filter(d => d.id !== id);
     if (state.selected === id) state.selected = null;
     await removePersisted(id);
@@ -1471,6 +1640,8 @@ document.getElementById("scan-body").addEventListener("click", async ev => {
   if (!tr) return;
   state.selected = tr.dataset.id;
   state.view = "detail";
+  state.hoverIdx = null;
+  state.activeEvent = null;
   render();
 });
 
@@ -1481,15 +1652,48 @@ document.querySelectorAll("th.sortable").forEach(th => th.addEventListener("clic
   renderScan();
 }));
 
-document.getElementById("sel-symbol").addEventListener("change", e => { state.selected = e.target.value; renderDetail(); });
+document.getElementById("q").addEventListener("input", e => { state.query = e.target.value.trim(); renderScan(); });
+
+document.getElementById("chipfilters").addEventListener("click", ev => {
+  const b = ev.target.closest("button[data-filter]");
+  if (!b) return;
+  state.filter = b.dataset.filter;
+  document.querySelectorAll("[data-filter]").forEach(x => x.classList.toggle("is-on", x === b));
+  renderScan();
+});
+
+document.getElementById("sel-symbol").addEventListener("change", e => {
+  state.selected = e.target.value;
+  state.hoverIdx = null; state.activeEvent = null;
+  renderDetail();
+});
 
 document.querySelectorAll("[data-range]").forEach(b => b.addEventListener("click", () => {
-  state.range = +b.dataset.range; persist(); renderDetail();
+  state.range = +b.dataset.range; state.hoverIdx = null; state.activeEvent = null;
+  persist(); renderDetail();
 }));
 
 document.querySelectorAll("[data-panel]").forEach(b => b.addEventListener("click", () => {
-  state.panels[b.dataset.panel] = !state.panels[b.dataset.panel]; persist(); renderDetail();
+  state.panels[b.dataset.panel] = !state.panels[b.dataset.panel];
+  persist(); renderDetail();
 }));
+
+// 點訊號紀錄 → 十字線跳到那一天
+function jumpToEvent(i) {
+  state.activeEvent = i;
+  setHover(i);
+  renderChart(); updateCrosshair(); renderReadout(); renderEvents();
+  document.querySelector("#chart-host svg")?.focus({ preventScroll: true });
+}
+document.getElementById("events").addEventListener("click", ev => {
+  const row = ev.target.closest(".ev[data-i]");
+  if (row) jumpToEvent(+row.dataset.i);
+});
+document.getElementById("events").addEventListener("keydown", ev => {
+  if (ev.key !== "Enter" && ev.key !== " ") return;
+  const row = ev.target.closest(".ev[data-i]");
+  if (row) { ev.preventDefault(); jumpToEvent(+row.dataset.i); }
+});
 
 /* --- 載入資料 --- */
 const dlgImport = document.getElementById("dlg-import");
@@ -1506,12 +1710,12 @@ document.getElementById("btn-add").addEventListener("click", async () => {
   if (!name) { errEl.textContent = "請先填標的名稱。"; return; }
   if (!text.trim()) { errEl.textContent = "請貼上日線資料。"; return; }
   let bars;
-  try { bars = parseSeries(text); }
-  catch (e) { errEl.textContent = e.message; return; }
+  try { bars = parseSeries(text); } catch (e) { errEl.textContent = e.message; return; }
 
-  const ds = { id: newId(), name, demo: false, note: `${bars.length} 筆日線`, bars };
+  const ds = { id: newId(), name, src: "manual", note: `${bars.length} 筆日線`, bars };
   state.datasets = [ds, ...state.datasets];
   state.selected = ds.id;
+  state.hoverIdx = null; state.activeEvent = null;
   recomputeAll();
   const ok = await persistDataset(ds);
   document.getElementById("in-name").value = "";
@@ -1531,8 +1735,7 @@ document.getElementById("btn-demo").addEventListener("click", () => {
 /* --- 參數 --- */
 const dlgSettings = document.getElementById("dlg-settings");
 const PARAM_KEYS = ["maFast", "maMid", "maSlow", "rsiLen", "rsiHi", "rsiLo", "volMult", "bias"];
-
-function fillParams() { for (const k of PARAM_KEYS) document.getElementById("p-" + k).value = state.params[k]; }
+const fillParams = () => { for (const k of PARAM_KEYS) document.getElementById("p-" + k).value = state.params[k]; };
 
 document.getElementById("btn-settings").addEventListener("click", () => { fillParams(); dlgSettings.showModal(); });
 document.getElementById("btn-reset-params").addEventListener("click", () => { state.params = { ...DEFAULTS }; fillParams(); });
@@ -1551,7 +1754,7 @@ dlgSettings.addEventListener("close", async () => {
   recomputeAll(); render();
 });
 
-/* --- AI 摘要 --- */
+/* --- AI 摘要(只在 Claude Artifact 環境出現) --- */
 async function setupAi() {
   if (typeof window.claude?.use !== "function") return;
   let sample;
@@ -1567,7 +1770,7 @@ async function setupAi() {
     btn.disabled = true; out.textContent = "撰寫中…";
     const i = a.last, ind = a.ind, p = state.params;
     const facts = [
-      `標的名稱:${a.name}${a.demo ? "(模擬的示範資料,非真實個股)" : ""}`,
+      `標的名稱:${a.name}${a.src === "demo" ? "(模擬的示範資料,非真實個股)" : ""}`,
       `資料日期:${a.bars[i].d}`,
       `收盤 ${nf(a.close)},較前一日 ${signed(a.chgPct)}%`,
       `MA${p.maFast} ${nf(ind.maFast[i])} / MA${p.maMid} ${nf(ind.maMid[i])} / MA${p.maSlow} ${nf(ind.maSlow[i])}`,
@@ -1584,14 +1787,12 @@ async function setupAi() {
     } catch (err) {
       const code = err && err.code;
       if (code === "not_granted") { card.hidden = true; return; }
-      out.textContent = code === "rate_limited"
-        ? "請求太頻繁,請稍等一下再試。"
-        : (err && err.text) || "這次摘要沒有寫完,請再按一次。";
+      out.textContent = code === "rate_limited" ? "請求太頻繁,請稍等一下再試。" : (err && err.text) || "這次摘要沒有寫完,請再按一次。";
     } finally { btn.disabled = false; }
   });
 }
 
-/* --- 視窗縮放 --- */
+/* --- 縮放 --- */
 let rzTimer = null;
 window.addEventListener("resize", () => {
   if (state.view !== "detail") return;
@@ -1600,7 +1801,7 @@ window.addEventListener("resize", () => {
 });
 
 /* =========================================================
-   12. 啟動
+   13. 啟動
    ========================================================= */
 (async function boot() {
   await initStorage();
@@ -1610,14 +1811,19 @@ window.addEventListener("resize", () => {
     if (cached.params) state.params = { ...DEFAULTS, ...cached.params };
     if (cached.panels) state.panels = { ...state.panels, ...cached.panels };
     if (typeof cached.range === "number") state.range = cached.range;
-    if (Array.isArray(cached.datasets)) state.datasets = cached.datasets.filter(d => d && Array.isArray(d.bars) && d.bars.length >= 30);
+    if (Array.isArray(cached.datasets)) state.datasets = cached.datasets;
+  }
+
+  const feed = await loadFeed();
+  if (feed) {
+    state.feed = { updatedAt: feed.updatedAt, source: feed.source };
+    state.datasets = [...feed.sets, ...state.datasets];
   }
   if (!state.datasets.length) state.datasets = demoSets();
 
   recomputeAll();
   render();
 
-  // db 稍後才會回應,回來後再合併一次
   hydrateFromDb().then(changed => {
     if (!changed) return;
     if (!state.datasets.length) state.datasets = demoSets();
@@ -1628,3 +1834,5 @@ window.addEventListener("resize", () => {
   setupAi();
 })();
 </script>
+</body>
+</html>

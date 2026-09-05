@@ -1,0 +1,42 @@
+name: 更新股市資料
+
+on:
+  # 手動觸發
+  workflow_dispatch:
+
+  # 抓取邏輯(fetch_stocks.py 的 fetch_daily_bars)實作完成後,
+  # 取消下面的註解即可自動排程。
+  # 台股收盤後每天跑一次:台灣時間 15:10(UTC 07:10),週一至週五
+  #
+  # schedule:
+  #   - cron: "10 7 * * 1-5"
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安裝套件
+        # 抓取邏輯若用到其他套件,加在這一行
+        run: pip install requests
+
+      - name: 抓取日線資料
+        run: python fetch_stocks.py
+
+      - name: 提交並推送更新
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/data/stocks.json
+          git diff --cached --quiet || git commit -m "自動更新股市資料 $(TZ='Asia/Taipei' date '+%Y/%m/%d %H:%M')"
+          git push
