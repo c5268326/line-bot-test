@@ -26,8 +26,22 @@ FinMind、證交所 OpenAPI 皆回傳 `EGRESS_BLOCKED`），連政府開放資�
 - CLI 也已經跑過一次 `python -m tw_stock_backtest.run_backtest --source synthetic`，
   能完整輸出 `equity_curve.csv`、`trades.csv`、`report.json` 三個檔案。
 
-**你需要做的事**：在一個有一般網路權限的環境（自己的電腦、GitHub Actions、Google Colab 等）
-安裝套件並執行下面「如何取得真實回測結果」的步驟，就能得到真實資料算出來的報酬率。
+## ✅ 已幫你架好：GitHub Actions 自動回測（推薦，不需要手動做任何事）
+
+`.github/workflows/tw_stock_backtest.yml` 會在 GitHub 自己的 runner 上執行（不受這個
+沙盒環境的網路限制），完全自動：
+1. 手動觸發：Repo 頁面 → **Actions** → 「台股多因子回測」→ **Run workflow**（可選資料源
+   / 回測區間，留空用預設）。
+2. 或什麼都不用做：**每週一台灣時間早上 9 點自動跑一次**，同時跑 `default` / `long_term`
+   / `short_term` 三組預設。
+3. 結果自動 commit 回 [`results/`](./results/) 目錄（`report.json` / `equity_curve.csv` /
+   `trades.csv`），也會寫進該次 workflow run 的 Job Summary，不需要下載、不需要自己執行
+   任何指令。
+4.（可選）到 repo 的 Settings → Secrets and variables → Actions 加一個 `FINMIND_TOKEN`
+   （https://finmindtrade.com/ 免費註冊），可以提高資料源的 API 呼叫額度；不加也能跑。
+
+這是目前**唯一不需要你自己動手**的路徑——下面「如何取得真實回測結果」是給想在本機/自己
+的 CI 環境手動控制參數時參考的步驟，兩者用的是同一套程式碼。
 
 ## 目錄結構
 
