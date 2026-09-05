@@ -213,6 +213,17 @@ def rank_composite(items):
     return [(sid, ranks[sid]) for sid, _, _ in items]
 
 
+def universe_at(universe, when):
+    """
+    universe 可以是兩種形式:
+      list  固定清單(舊做法,所有換股日共用同一批股票)
+      dict  {換股日: [清單]} 的 point-in-time 對照,每一期只看當時買得到的
+    """
+    if isinstance(universe, dict):
+        return universe.get(when, [])
+    return universe
+
+
 def build_scores(strategy, when, universe, price, val, revenue):
     """回傳 [(stock_id, 分數)],分數越高越優先"""
 
@@ -221,7 +232,7 @@ def build_scores(strategy, when, universe, price, val, revenue):
         # 先前寫成 roe/PBR,代入 roe=PBR/PER 後恰好等於 1/PER,
         # 等於退化成純低本益比,品質完全沒有參與排序 —— 那是實作錯誤。
         cand = []
-        for sid in universe:
+        for sid in universe_at(universe, when):
             pser = price.get(sid)
             if not pser or when not in pser:
                 continue
@@ -240,7 +251,7 @@ def build_scores(strategy, when, universe, price, val, revenue):
         return scored
 
     out = []
-    for sid in universe:
+    for sid in universe_at(universe, when):
         pser = price.get(sid)
         if not pser or when not in pser:
             continue                      # 當日沒交易(未上市/停牌)就跳過
@@ -293,7 +304,7 @@ def run(strategy, use_stop, price, val, revenue, all_dates, universe):
     for i, rb in enumerate(rebals):
         end_date = rebals[i + 1] if i + 1 < len(rebals) else all_dates[-1]
         span = all_dates[date_idx[rb]: date_idx[end_date] + 1]
-        n_hold = len(universe) if strategy == "universe_ew" else TOP_N
+        n_hold = len(universe_at(universe, rb)) if strategy == "universe_ew" else TOP_N
         picks = [s for s, _ in build_scores(strategy, rb, universe, price, val, revenue)[:n_hold]]
 
         if not picks:
@@ -458,7 +469,10 @@ def main():
     results = {"config": {
         "start": START, "end": all_dates[-1], "top_n": TOP_N,
         "stop_loss": STOP_LOSS, "fee": FEE, "tax": TAX,
-        "universe_size": len(universe), "rebalance": "quarterly",
+        "universe_size": (max(len(v) for v in universe.values()) if isinstance(universe, dict)
+                          else len(universe)),
+        "universe_mode": "point-in-time" if isinstance(universe, dict) else "fixed",
+        "rebalance": "quarterly",
     }, "strategies": {}, "benchmark": {}}
 
     # 對照組:同 universe 等權全持,不含停損。
