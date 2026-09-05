@@ -4,8 +4,11 @@ on:
   # 手動觸發
   workflow_dispatch:
 
-  # 平日台灣時間 08:30～17:30，每60分鐘執行一次（UTC 00:30～09:30，週一至週五）
+  # 平日台灣時間 07:30～17:30，每60分鐘執行一次
+  # 07:30 = UTC 23:30 前一天（週一~週五對應 UTC 週日~週四）
+  # 08:30～17:30 = UTC 00:30～09:30（週一~週五）
   schedule:
+    - cron: "30 23 * * 0-4"
     - cron: "30 0-9 * * 1-5"
 
 jobs:
@@ -19,7 +22,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 安裝 Python 套件
-        run: pip install google-auth google-auth-oauthlib google-api-python-client openpyxl xlrd
+        run: pip install google-auth google-auth-oauthlib google-api-python-client openpyxl xlrd requests
 
       - name: 抓取 Gmail 最新 Excel 並更新業績資料
         env:
@@ -34,3 +37,9 @@ jobs:
           git add data/performance.json
           git diff --cached --quiet || git commit -m "自動更新業績資料 $(TZ='Asia/Taipei' date '+%Y/%m/%d %H:%M')"
           git push
+
+      - name: 寄送執行完成通知
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python send_notify.py
