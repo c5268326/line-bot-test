@@ -770,48 +770,6 @@ def stock_station_asset(filename):
 # 監測幾檔股票,對外都只有一次請求。
 _QUOTE_CACHE = {"at": 0, "payload": None}
 _QUOTE_TTL = 600          # 快取 10 分鐘,避免每次重新整理都打證交所
-TWSE_ALL = "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json"
-
-
-def _fetch_twse_today():
-    """回傳 {股票代號: [日期, 開, 高, 低, 收, 量(張)]},失敗回傳 {}"""
-    import csv as _csv
-    import io as _io
-    import urllib.request as _req
-
-    r = _req.Request(TWSE_ALL, headers={
-        "User-Agent": "Mozilla/5.0 (compatible; tw-signal-station/1.0)",
-        "Accept": "text/csv, application/json, */*",
-    })
-    with _req.urlopen(r, timeout=20) as resp:
-        rows = list(_csv.DictReader(_io.StringIO(resp.read().decode("utf-8-sig"))))
-
-    def num(s):
-        try:
-            return float(str(s).replace(",", "").strip('"'))
-        except (TypeError, ValueError):
-            return None
-
-    out = {}
-    for row in rows:
-        code = (row.get("證券代號") or "").strip().strip('"')
-        if not (len(code) == 4 and code.isdigit()):
-            continue
-        raw_date = (row.get("日期") or "").strip().strip('"')
-        if len(raw_date) != 7 or not raw_date.isdigit():
-            continue
-        # 民國年轉西元
-        iso = f"{int(raw_date[:3]) + 1911}-{raw_date[3:5]}-{raw_date[5:7]}"
-
-        c = num(row.get("收盤價"))
-        if not c or c <= 0:
-            continue
-        o = num(row.get("開盤價")) or c
-        h = num(row.get("最高價")) or c
-        l = num(row.get("最低價")) or c
-        shares = num(row.get("成交股數")) or 0
-        out[code] = [iso, o, h, l, c, int(shares // 1000)]
-    return out
 
 
 @app.route("/stock/api/stocks", methods=["GET"])
@@ -831,7 +789,8 @@ def stock_station_api():
 
     live_note = "歷史資料"
     try:
-        today = _fetch_twse_today()
+        from twse_quotes import fetch_today
+        today = fetch_today()
     except Exception as e:                       # noqa: BLE001 - 抓不到就用歷史資料
         today = {}
         print(f"[stock api] 取得證交所當日資料失敗:{e}")
