@@ -181,17 +181,55 @@ def build_universes():
     return sorted(members)
 
 
-def fetch_prices(ids):
-    """用 FinMind 抓聯集個股的日線(含已下市者)"""
-    path = os.path.join(OUT_DIR, "price.csv.gz")
-    print(f"\n=== 抓取 {len(ids)} 檔日線({PRICE_START} ~ {END})===", flush=True)
-    fields = ["date", "stock_id", "open", "max", "min", "close", "Trading_Volume"]
-    total, missing = 0, []
+FIELDS = ["date", "stock_id", "open", "max", "min", "close", "Trading_Volume"]
 
-    with gzip.open(path, "wt", encoding="utf-8", newline="") as gz:
+
+def existing_prices(path):
+    """
+    讀出已抓到的日線,回傳 (每檔的資料列, 已完成的代號集合)。
+    抓取被中斷時 gzip 串流不會正常收尾,此時保留讀得到的部分並丟掉
+    最後一檔(它可能只寫到一半),下次續抓時重抓那一檔即可。
+    """
+    if not os.path.exists(path):
+        return {}, set()
+    per, last_sid = {}, None
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                sid = r["stock_id"]
+                per.setdefault(sid, []).append([r.get(k) for k in FIELDS])
+                last_sid = sid
+    except (EOFError, gzip.BadGzipFile):
+        if last_sid:
+            per.pop(last_sid, None)          # 最後一檔可能不完整,丟掉重抓
+    return per, set(per)
+
+
+def fetch_prices(ids):
+    """用 FinMind 抓聯集個股的日線(含已下市者),支援續抓"""
+    path = os.path.join(OUT_DIR, "price.csv.gz")
+    kept, done = existing_prices(path)
+    todo = [s for s in ids if s not in done]
+
+    if done:
+        print(f"\n=== 續抓:已有 {len(done)} 檔,尚缺 {len(todo)} 檔 ===", flush=True)
+    else:
+        print(f"\n=== 抓取 {len(ids)} 檔日線({PRICE_START} ~ {END})===", flush=True)
+    if not todo:
+        print("  全部已完成,不需重抓", flush=True)
+        return
+
+    fields = FIELDS
+    total, missing = sum(len(v) for v in kept.values()), []
+
+    tmp = path + ".tmp"
+    with gzip.open(tmp, "wt", encoding="utf-8", newline="") as gz:
         w = csv.writer(gz)
         w.writerow(fields)
-        for i, sid in enumerate(ids, 1):
+        for sid in ids:                       # 先寫回已完成的部分,維持代號順序
+            for row in kept.get(sid, []):
+                w.writerow(row)
+        for i, sid in enumerate(todo, 1):
             url = (f"{FINMIND}?dataset=TaiwanStockPrice&data_id={sid}"
                    f"&start_date={PRICE_START}&end_date={END}")
             j = get_json(url)
@@ -203,16 +241,23 @@ def fetch_prices(ids):
             for r in data:
                 w.writerow([r.get(k) for k in fields])
             total += len(data)
-            if i % 25 == 0 or i == len(ids):
-                print(f"  [{i:4}/{len(ids)}] 累計 {total:,} 筆,缺 {len(missing)}", flush=True)
+            if i % 20 == 0 or i == len(todo):
+                print(f"  [{i:4}/{len(todo)}] 累計 {total:,} 筆,缺 {len(missing)}", flush=True)
 
+    os.replace(tmp, path)
     print(f"\n日線完成:{total:,} 筆,{os.path.getsize(path)/1024/1024:.1f} MB,"
           f"缺漏 {len(missing)} 檔 {missing[:10]}", flush=True)
 
 
 def main():
     os.makedirs(OUT_DIR, exist_ok=True)
-    ids = build_universes()
+    uni_path = os.path.join(OUT_DIR, "universe_by_date.csv")
+    if os.path.exists(uni_path) and os.path.getsize(uni_path) > 10_000:
+        with open(uni_path, encoding="utf-8") as f:
+            ids = sorted({r["stock_id"] for r in csv.DictReader(f)})
+        print(f"沿用既有股票池:{len(ids)} 檔(如需重建請先刪除 {uni_path})", flush=True)
+    else:
+        ids = build_universes()
     if not ids:
         raise SystemExit("✗ 沒有建立出任何股票池")
     fetch_prices(ids)
