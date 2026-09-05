@@ -1,0 +1,1630 @@
+<title>台股訊號檢測站</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600;700&display=swap">
+
+<style>
+/* ---------- reset ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; }
+img { max-width: 100%; }
+[hidden] { display: none !important; }
+button, input, textarea, select { font: inherit; color: inherit; }
+
+/* ---------- tokens: light ---------- */
+:root {
+  color-scheme: light;
+  --ground:      #F5F4F0;
+  --surface:     #FFFFFF;
+  --surface-2:   #FAF9F5;
+  --surface-3:   #EFEDE6;
+  --ink:         #1B1A17;
+  --ink-2:       #4A4740;
+  --ink-muted:   #6E6A62;
+  --rule:        #E3DFD6;
+  --rule-strong: #CFC9BC;
+  --accent:      #1F3A5F;
+  --accent-soft: #E8EDF4;
+  --up:          #C62828;
+  --up-soft:     #FBEAE8;
+  --down:        #1B7F5A;
+  --down-soft:   #E5F3ED;
+  --neutral-chip:#EDEAE2;
+  --ma-fast:     #2563C9;
+  --ma-mid:      #B77400;
+  --ma-slow:     #7A4FC0;
+  --grid:        #EAE7DF;
+  --band:        #F2F0E9;
+  --shadow:      0 1px 2px rgba(27,26,23,.05), 0 8px 24px rgba(27,26,23,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground:      #151513;
+    --surface:     #1D1D1A;
+    --surface-2:   #232320;
+    --surface-3:   #2B2B27;
+    --ink:         #EDEAE3;
+    --ink-2:       #C3BFB6;
+    --ink-muted:   #98938A;
+    --rule:        #33322D;
+    --rule-strong: #46443D;
+    --accent:      #8FB4DE;
+    --accent-soft: #22303E;
+    --up:          #F0574C;
+    --up-soft:     #38211F;
+    --down:        #35B98A;
+    --down-soft:   #17302A;
+    --neutral-chip:#2E2D29;
+    --ma-fast:     #4E8AE0;
+    --ma-mid:      #C0871F;
+    --ma-slow:     #9670D0;
+    --grid:        #2A2A26;
+    --band:        #232320;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.28);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground:      #151513;
+  --surface:     #1D1D1A;
+  --surface-2:   #232320;
+  --surface-3:   #2B2B27;
+  --ink:         #EDEAE3;
+  --ink-2:       #C3BFB6;
+  --ink-muted:   #98938A;
+  --rule:        #33322D;
+  --rule-strong: #46443D;
+  --accent:      #8FB4DE;
+  --accent-soft: #22303E;
+  --up:          #F0574C;
+  --up-soft:     #38211F;
+  --down:        #35B98A;
+  --down-soft:   #17302A;
+  --neutral-chip:#2E2D29;
+  --ma-fast:     #4E8AE0;
+  --ma-mid:      #C0871F;
+  --ma-slow:     #9670D0;
+  --grid:        #2A2A26;
+  --band:        #232320;
+  --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.28);
+}
+
+/* ---------- base ---------- */
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.num { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.shell { max-width: 1240px; margin: 0 auto; padding: 22px 20px 64px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+/* ---------- topbar ---------- */
+.topbar {
+  display: flex; flex-wrap: wrap; gap: 18px 24px;
+  align-items: flex-end; justify-content: space-between;
+  padding-bottom: 16px; border-bottom: 2px solid var(--ink);
+}
+.brand h1 {
+  font-family: "Noto Serif TC", Georgia, serif;
+  font-weight: 700; font-size: 27px; line-height: 1.25;
+  margin: 0 0 4px; letter-spacing: .01em; text-wrap: balance;
+}
+.brand .tagline { margin: 0; color: var(--ink-muted); font-size: 13.5px; max-width: 56ch; }
+.topbar-actions { display: flex; gap: 8px; }
+
+/* ---------- buttons ---------- */
+.btn {
+  border: 1px solid var(--rule-strong); background: var(--surface);
+  color: var(--ink); border-radius: 3px; padding: 7px 14px;
+  font-size: 13.5px; font-weight: 500; cursor: pointer;
+  transition: background .12s, border-color .12s, color .12s;
+}
+.btn:hover { background: var(--surface-3); border-color: var(--ink-muted); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+:root[data-theme="dark"] .btn-primary,
+:root:not([data-theme="light"]) .btn-primary { color: var(--ground); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .btn-primary { color: #fff; } }
+.btn-primary:hover { filter: brightness(1.12); background: var(--accent); border-color: var(--accent); }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--ink-muted); padding: 4px 8px; }
+.btn-ghost:hover { background: var(--surface-3); color: var(--ink); border-color: transparent; }
+.btn-sm { padding: 4px 10px; font-size: 12.5px; }
+
+/* ---------- view tabs ---------- */
+.viewtabs { display: flex; gap: 2px; margin: 0 0 20px; border-bottom: 1px solid var(--rule); }
+.viewtabs button {
+  border: none; background: none; cursor: pointer; padding: 11px 16px 9px;
+  font-size: 14.5px; font-weight: 500; color: var(--ink-muted);
+  border-bottom: 3px solid transparent; margin-bottom: -1px;
+}
+.viewtabs button:hover { color: var(--ink); }
+.viewtabs button.is-active { color: var(--ink); border-bottom-color: var(--accent); font-weight: 700; }
+
+/* ---------- stat strip ---------- */
+.statstrip {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+  border-radius: 4px; overflow: hidden; margin-bottom: 20px;
+}
+.stat { background: var(--surface); padding: 13px 16px; }
+.stat-k {
+  font-size: 11px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink-muted); font-weight: 500; margin-bottom: 3px;
+}
+.stat-v { font-size: 22px; font-weight: 700; line-height: 1.15; }
+.stat-sub { font-size: 12px; color: var(--ink-muted); margin-top: 1px; }
+
+/* ---------- table ---------- */
+.tablewrap {
+  overflow-x: auto; background: var(--surface);
+  border: 1px solid var(--rule); border-radius: 4px; box-shadow: var(--shadow);
+}
+table.scan { width: 100%; border-collapse: collapse; min-width: 860px; }
+table.scan th {
+  text-align: left; font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-muted); font-weight: 600; padding: 10px 14px;
+  border-bottom: 1px solid var(--rule-strong); white-space: nowrap; background: var(--surface-2);
+}
+table.scan th.sortable { cursor: pointer; user-select: none; }
+table.scan th.sortable:hover { color: var(--ink); }
+table.scan th .arrow { opacity: .45; font-size: 9px; margin-left: 3px; }
+table.scan td { padding: 11px 14px; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+table.scan tbody tr { cursor: pointer; }
+table.scan tbody tr:hover { background: var(--surface-2); }
+table.scan tbody tr:last-child td { border-bottom: none; }
+.t-right { text-align: right; }
+.sym-name { font-weight: 700; font-size: 14.5px; }
+.sym-meta { font-size: 11.5px; color: var(--ink-muted); }
+.px { font-size: 15px; font-weight: 500; }
+.up { color: var(--up); }
+.down { color: var(--down); }
+.flat { color: var(--ink-muted); }
+
+/* ---------- verdict bar (diverging) ---------- */
+.verdict { display: flex; align-items: center; gap: 9px; }
+.vbar { position: relative; width: 96px; height: 15px; background: var(--surface-3); border-radius: 2px; flex: none; }
+.vbar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--rule-strong); }
+.vfill { position: absolute; top: 2px; bottom: 2px; border-radius: 1px; }
+.vlabel { font-size: 12.5px; font-weight: 700; white-space: nowrap; min-width: 3.6em; }
+
+/* ---------- signal chips ---------- */
+.chips { display: flex; flex-wrap: wrap; gap: 4px; max-width: 420px; }
+.chip {
+  font-size: 11.5px; line-height: 1.5; padding: 2px 7px; border-radius: 3px;
+  white-space: nowrap; font-weight: 500; border: 1px solid transparent;
+}
+.chip-up { background: var(--up-soft); color: var(--up); border-color: color-mix(in srgb, var(--up) 22%, transparent); }
+.chip-down { background: var(--down-soft); color: var(--down); border-color: color-mix(in srgb, var(--down) 22%, transparent); }
+.chip-neutral { background: var(--neutral-chip); color: var(--ink-2); border-color: var(--rule); }
+.chip-demo { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 25%, transparent); }
+.chip-age { opacity: .72; font-weight: 400; }
+.chip-none { font-size: 12.5px; color: var(--ink-muted); }
+
+/* ---------- detail view ---------- */
+.detail-bar {
+  display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center;
+  justify-content: space-between; margin-bottom: 14px;
+}
+.picker { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.picker select {
+  background: var(--surface); border: 1px solid var(--rule-strong); color: var(--ink);
+  border-radius: 3px; padding: 6px 10px; font-size: 14px; font-weight: 500; cursor: pointer;
+}
+.togglerow { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.toggle {
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink-muted);
+  border-radius: 3px; padding: 3px 10px; font-size: 12.5px; cursor: pointer; font-weight: 500;
+}
+.toggle:hover { color: var(--ink); }
+.toggle.is-on { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+:root[data-theme="dark"] .toggle.is-on,
+:root:not([data-theme="light"]) .toggle.is-on { color: var(--ground); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .toggle.is-on { color: #fff; } }
+.togglegroup-label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-muted); font-weight: 600; margin-right: 2px; }
+
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 4px; box-shadow: var(--shadow); }
+.card-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding: 13px 16px 11px; border-bottom: 1px solid var(--rule);
+}
+.card-title { font-family: "Noto Serif TC", Georgia, serif; font-weight: 600; font-size: 16px; margin: 0; }
+.card-note { font-size: 12px; color: var(--ink-muted); }
+.card-body { padding: 16px; }
+
+/* readout strip */
+.readout {
+  display: flex; flex-wrap: wrap; gap: 0; border-bottom: 1px solid var(--rule);
+  background: var(--surface-2); padding: 4px 6px;
+}
+.ro { padding: 6px 12px; min-width: 84px; }
+.ro-k { font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-muted); font-weight: 600; }
+.ro-v { font-size: 14px; font-weight: 500; line-height: 1.35; }
+.ro-date .ro-v { font-weight: 700; }
+
+.chart-host { padding: 6px 4px 2px; }
+.chart-host svg { display: block; width: 100%; height: auto; }
+.legendrow { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 16px 12px; border-top: 1px solid var(--rule); }
+.lg { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-muted); }
+.lg i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; flex: none; }
+
+/* svg chart classes */
+.c-grid { stroke: var(--grid); stroke-width: 1; }
+.c-axis { stroke: var(--rule-strong); stroke-width: 1; }
+.c-txt { fill: var(--ink-muted); font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 10.5px; }
+.c-txt-lbl { fill: var(--ink-muted); font-family: "Noto Sans TC", sans-serif; font-size: 11px; font-weight: 600; }
+.c-band { fill: var(--band); }
+.c-up { fill: var(--up); stroke: var(--up); }
+.c-down { fill: var(--down); stroke: var(--down); }
+.c-ma-fast { stroke: var(--ma-fast); fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+.c-ma-mid  { stroke: var(--ma-mid);  fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+.c-ma-slow { stroke: var(--ma-slow); fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+.c-boll { stroke: var(--ink-muted); fill: none; stroke-width: 1; stroke-dasharray: 3 3; opacity: .75; }
+.c-boll-fill { fill: var(--ink-muted); opacity: .07; }
+.c-ref { stroke: var(--rule-strong); stroke-width: 1; stroke-dasharray: 2 3; }
+.c-cross { stroke: var(--ink); stroke-width: 1; opacity: .5; pointer-events: none; }
+.c-hit { fill: transparent; }
+.c-panelbg { fill: var(--surface-2); }
+
+/* detail grid */
+.detail-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 16px; margin-top: 16px; align-items: start; }
+@media (max-width: 860px) { .detail-grid { grid-template-columns: 1fr; } }
+
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 14px 18px; }
+.metric-k { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-muted); font-weight: 600; }
+.metric-v { font-size: 17px; font-weight: 700; line-height: 1.25; }
+.metric-s { font-size: 11.5px; color: var(--ink-muted); }
+
+.evlist { display: flex; flex-direction: column; }
+.ev { display: grid; grid-template-columns: 84px 1fr; gap: 12px; padding: 9px 0; border-bottom: 1px dashed var(--rule); align-items: start; }
+.ev:last-child { border-bottom: none; }
+.ev-d { font-size: 12.5px; color: var(--ink-muted); padding-top: 1px; }
+.ev-b { display: flex; flex-direction: column; gap: 2px; }
+.ev-t { font-size: 13.5px; font-weight: 500; }
+.ev-x { font-size: 12px; color: var(--ink-muted); }
+.ev-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
+.scrolly { max-height: 340px; overflow-y: auto; }
+
+/* AI panel */
+.ai-out { font-size: 14px; line-height: 1.75; white-space: pre-wrap; margin-top: 12px; color: var(--ink-2); }
+.ai-out:empty { display: none; }
+.ai-hint { font-size: 12.5px; color: var(--ink-muted); }
+
+/* banner */
+.banner {
+  display: flex; gap: 10px; align-items: baseline; padding: 10px 14px; border-radius: 4px;
+  background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  font-size: 13px; color: var(--ink-2); margin-bottom: 16px;
+}
+.banner b { color: var(--accent); }
+
+/* dialogs */
+dialog {
+  border: 1px solid var(--rule-strong); border-radius: 5px; background: var(--surface); color: var(--ink);
+  padding: 0; max-width: 640px; width: calc(100% - 32px); box-shadow: 0 18px 60px rgba(0,0,0,.28);
+}
+dialog::backdrop { background: rgba(20,19,16,.42); }
+.dlg-head { padding: 16px 20px 12px; border-bottom: 1px solid var(--rule); }
+.dlg-head h2 { font-family: "Noto Serif TC", Georgia, serif; font-size: 18px; margin: 0 0 3px; font-weight: 600; }
+.dlg-head p { margin: 0; font-size: 13px; color: var(--ink-muted); }
+.dlg-body { padding: 16px 20px; max-height: 62vh; overflow-y: auto; }
+.dlg-foot { padding: 12px 20px 16px; border-top: 1px solid var(--rule); display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-muted); font-weight: 600; margin-bottom: 5px; }
+.field input[type=text], .field input[type=number], .field textarea {
+  width: 100%; background: var(--surface-2); border: 1px solid var(--rule-strong); border-radius: 3px;
+  padding: 8px 10px; font-size: 14px;
+}
+.field textarea { min-height: 168px; resize: vertical; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12.5px; line-height: 1.55; white-space: pre; }
+.field .hint { font-size: 12px; color: var(--ink-muted); margin-top: 5px; }
+.fmt { background: var(--surface-2); border: 1px solid var(--rule); border-radius: 3px; padding: 10px 12px; font-size: 12px; color: var(--ink-muted); }
+.fmt code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11.5px; color: var(--ink-2); display: block; white-space: pre; overflow-x: auto; margin-top: 6px; }
+.parambox { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 16px; }
+.err { color: var(--up); font-size: 13px; margin-top: 8px; font-weight: 500; }
+.err:empty { display: none; }
+
+/* footer */
+.foot { margin-top: 34px; padding-top: 14px; border-top: 1px solid var(--rule); font-size: 12px; color: var(--ink-muted); display: flex; flex-wrap: wrap; gap: 6px 18px; justify-content: space-between; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="shell">
+  <header class="topbar">
+    <div class="brand">
+      <h1>台股訊號檢測站</h1>
+      <p class="tagline">貼上日線資料,自動算出均線、RSI、MACD、KD 與布林通道,並標出當日觸發的技術訊號。紅漲綠跌依台股慣例。</p>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn" id="btn-settings">參數設定</button>
+      <button class="btn btn-primary" id="btn-import">載入資料</button>
+    </div>
+  </header>
+
+  <nav class="viewtabs" id="viewtabs">
+    <button data-view="scan" class="is-active">檢測站</button>
+    <button data-view="detail">個股分析</button>
+  </nav>
+
+  <!-- ============ SCAN VIEW ============ -->
+  <section id="view-scan">
+    <div class="statstrip" id="statstrip"></div>
+    <div class="tablewrap">
+      <table class="scan">
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="name">標的<span class="arrow"></span></th>
+            <th class="sortable t-right" data-sort="close">收盤<span class="arrow"></span></th>
+            <th class="sortable t-right" data-sort="chg">漲跌<span class="arrow"></span></th>
+            <th class="t-right">量能</th>
+            <th class="sortable" data-sort="score">診斷<span class="arrow"></span></th>
+            <th>觸發訊號</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="scan-body"></tbody>
+      </table>
+    </div>
+    <p class="ai-hint" style="margin-top:10px">點任一列可切換到個股分析。訊號以最新一根日K為準,括號內為觸發距今天數。</p>
+  </section>
+
+  <!-- ============ DETAIL VIEW ============ -->
+  <section id="view-detail" hidden>
+    <div id="demo-banner" class="banner" hidden>
+      <b>示範資料</b>
+      <span>這檔是內建的模擬走勢,用來展示指標與訊號的運作方式,並非任何真實個股的行情。按「載入資料」貼上你自己的日線後即可分析實際標的。</span>
+    </div>
+
+    <div class="detail-bar">
+      <div class="picker">
+        <label for="sel-symbol" class="togglegroup-label">標的</label>
+        <select id="sel-symbol"></select>
+      </div>
+      <div class="togglerow">
+        <span class="togglegroup-label">期間</span>
+        <button class="toggle" data-range="60">60日</button>
+        <button class="toggle" data-range="120">120日</button>
+        <button class="toggle" data-range="250">250日</button>
+        <button class="toggle" data-range="0">全部</button>
+      </div>
+      <div class="togglerow">
+        <span class="togglegroup-label">面板</span>
+        <button class="toggle" data-panel="boll">布林</button>
+        <button class="toggle" data-panel="vol">成交量</button>
+        <button class="toggle" data-panel="rsi">RSI</button>
+        <button class="toggle" data-panel="macd">MACD</button>
+        <button class="toggle" data-panel="kd">KD</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="readout" id="readout"></div>
+      <div class="chart-host" id="chart-host"></div>
+      <div class="legendrow" id="legendrow"></div>
+    </div>
+
+    <div class="detail-grid">
+      <div class="card">
+        <div class="card-head">
+          <h3 class="card-title">指標現值</h3>
+          <span class="card-note" id="metrics-date"></span>
+        </div>
+        <div class="card-body"><div class="metrics" id="metrics"></div></div>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h3 class="card-title">訊號紀錄</h3>
+          <span class="card-note" id="events-note"></span>
+        </div>
+        <div class="card-body"><div class="evlist scrolly" id="events"></div></div>
+      </div>
+    </div>
+
+    <div class="card" id="ai-card" style="margin-top:16px" hidden>
+      <div class="card-head">
+        <h3 class="card-title">技術面摘要</h3>
+        <span class="card-note">由 Claude 依上方算出的指標數值撰寫</span>
+      </div>
+      <div class="card-body">
+        <button class="btn" id="btn-ai">產生摘要</button>
+        <p class="ai-hint" style="margin:8px 0 0">摘要只描述指標目前的狀態,不提供買賣建議。</p>
+        <div class="ai-out" id="ai-out"></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>本頁所有指標皆在瀏覽器內計算,資料不會離開這個頁面。</span>
+    <span>技術指標為歷史價量的數學運算結果,不構成投資建議。</span>
+  </footer>
+</div>
+
+<!-- ============ IMPORT DIALOG ============ -->
+<dialog id="dlg-import">
+  <form method="dialog">
+    <div class="dlg-head">
+      <h2>載入日線資料</h2>
+      <p>從券商、Yahoo 股市或證交所複製整段表格貼進來即可,欄位順序會自動判讀。</p>
+    </div>
+    <div class="dlg-body">
+      <div class="field">
+        <label for="in-name">標的名稱</label>
+        <input type="text" id="in-name" placeholder="例如 2330 台積電" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="in-data">日線資料</label>
+        <textarea id="in-data" spellcheck="false" placeholder="日期,開盤,最高,最低,收盤,成交量&#10;2026-08-01,1050,1070,1040,1060,32145"></textarea>
+        <div class="err" id="in-err"></div>
+      </div>
+      <div class="fmt">
+        認得的格式:有標題列時依欄名對應(日期／開盤價／最高價／最低價／收盤價／成交股數,中英皆可);沒有標題列時預設為
+        <code>日期, 開, 高, 低, 收, 量</code>
+        也接受只有「日期, 收盤價」兩欄。民國年(115/08/01)、千分位逗號、Tab 分隔、證交所的「--」空值都會自動處理。至少需要 30 筆才算得出季線。
+      </div>
+      <div style="margin-top:14px">
+        <button type="button" class="btn btn-sm" id="btn-demo">重新載入示範資料</button>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button class="btn" value="cancel">取消</button>
+      <button type="button" class="btn btn-primary" id="btn-add">加入檢測站</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- ============ SETTINGS DIALOG ============ -->
+<dialog id="dlg-settings">
+  <form method="dialog">
+    <div class="dlg-head">
+      <h2>檢測參數</h2>
+      <p>調整後所有標的會立刻重新計算。</p>
+    </div>
+    <div class="dlg-body">
+      <div class="parambox">
+        <div class="field"><label for="p-maFast">短期均線</label><input type="number" id="p-maFast" min="2" max="60" step="1"></div>
+        <div class="field"><label for="p-maMid">中期均線</label><input type="number" id="p-maMid" min="3" max="120" step="1"></div>
+        <div class="field"><label for="p-maSlow">長期均線</label><input type="number" id="p-maSlow" min="5" max="250" step="1"></div>
+        <div class="field"><label for="p-rsiLen">RSI 週期</label><input type="number" id="p-rsiLen" min="2" max="60" step="1"></div>
+        <div class="field"><label for="p-rsiHi">RSI 超買</label><input type="number" id="p-rsiHi" min="50" max="95" step="1"></div>
+        <div class="field"><label for="p-rsiLo">RSI 超賣</label><input type="number" id="p-rsiLo" min="5" max="50" step="1"></div>
+        <div class="field"><label for="p-volMult">爆量倍數</label><input type="number" id="p-volMult" min="1.2" max="6" step="0.1"></div>
+        <div class="field"><label for="p-bias">乖離警戒 %</label><input type="number" id="p-bias" min="3" max="40" step="1"></div>
+      </div>
+      <p class="ai-hint">MACD 固定為 12/26/9,KD 固定為 9 日 RSV 搭配 3 日平滑,布林通道為 20 日 ±2 個標準差,皆為台股常用設定。</p>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn" id="btn-reset-params">回復預設</button>
+      <button class="btn btn-primary" value="ok">完成</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+"use strict";
+
+/* =========================================================
+   1. 參數與狀態
+   ========================================================= */
+const DEFAULTS = { maFast: 5, maMid: 20, maSlow: 60, rsiLen: 14, rsiHi: 70, rsiLo: 30, volMult: 2, bias: 10 };
+
+const state = {
+  params: { ...DEFAULTS },
+  datasets: [],        // {id, name, demo, note, bars:[{d,o,h,l,c,v}]}
+  analysis: {},        // id -> analysis
+  view: "scan",
+  selected: null,
+  range: 120,
+  panels: { boll: false, vol: true, rsi: true, macd: true, kd: true },
+  sort: { key: "score", dir: -1 },
+  hoverIdx: null
+};
+
+const storage = { mode: "memory", db: null };
+
+/* =========================================================
+   2. 數學工具與技術指標
+   ========================================================= */
+function sma(src, p) {
+  const out = new Array(src.length).fill(null);
+  let sum = 0, cnt = 0;
+  for (let i = 0; i < src.length; i++) {
+    const v = src[i];
+    if (v == null) { sum = 0; cnt = 0; continue; }
+    sum += v; cnt++;
+    if (cnt > p) { sum -= src[i - p]; cnt = p; }
+    if (cnt === p) out[i] = sum / p;
+  }
+  return out;
+}
+
+function ema(src, p) {
+  const out = new Array(src.length).fill(null);
+  const k = 2 / (p + 1);
+  let prev = null, sum = 0;
+  for (let i = 0; i < src.length; i++) {
+    const v = src[i];
+    if (v == null) continue;
+    if (prev == null) {
+      sum += v;
+      if (i >= p - 1) { prev = sum / p; out[i] = prev; }
+    } else {
+      prev = v * k + prev * (1 - k);
+      out[i] = prev;
+    }
+  }
+  return out;
+}
+
+function rsi(closes, p) {
+  const out = new Array(closes.length).fill(null);
+  if (closes.length <= p) return out;
+  let gain = 0, loss = 0;
+  for (let i = 1; i <= p; i++) {
+    const ch = closes[i] - closes[i - 1];
+    if (ch >= 0) gain += ch; else loss -= ch;
+  }
+  let ag = gain / p, al = loss / p;
+  out[p] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+  for (let i = p + 1; i < closes.length; i++) {
+    const ch = closes[i] - closes[i - 1];
+    ag = (ag * (p - 1) + Math.max(ch, 0)) / p;
+    al = (al * (p - 1) + Math.max(-ch, 0)) / p;
+    out[i] = al === 0 ? 100 : 100 - 100 / (1 + ag / al);
+  }
+  return out;
+}
+
+function macd(closes) {
+  const f = ema(closes, 12), s = ema(closes, 26);
+  const dif = closes.map((_, i) => (f[i] == null || s[i] == null) ? null : f[i] - s[i]);
+  const dea = ema(dif, 9);
+  const hist = dif.map((v, i) => (v == null || dea[i] == null) ? null : v - dea[i]);
+  return { dif, dea, hist };
+}
+
+function kdj(bars, p) {
+  const n = bars.length;
+  const K = new Array(n).fill(null), D = new Array(n).fill(null);
+  let k = 50, d = 50;
+  for (let i = 0; i < n; i++) {
+    if (i < p - 1) continue;
+    let hi = -Infinity, lo = Infinity;
+    for (let j = i - p + 1; j <= i; j++) { if (bars[j].h > hi) hi = bars[j].h; if (bars[j].l < lo) lo = bars[j].l; }
+    const rsv = hi === lo ? 50 : (bars[i].c - lo) / (hi - lo) * 100;
+    k = (2 / 3) * k + (1 / 3) * rsv;
+    d = (2 / 3) * d + (1 / 3) * k;
+    K[i] = k; D[i] = d;
+  }
+  return { k: K, d: D };
+}
+
+function bollinger(closes, p, mult) {
+  const mid = sma(closes, p);
+  const up = new Array(closes.length).fill(null), lo = new Array(closes.length).fill(null);
+  for (let i = p - 1; i < closes.length; i++) {
+    if (mid[i] == null) continue;
+    let s = 0;
+    for (let j = i - p + 1; j <= i; j++) s += (closes[j] - mid[i]) ** 2;
+    const sd = Math.sqrt(s / p);
+    up[i] = mid[i] + mult * sd; lo[i] = mid[i] - mult * sd;
+  }
+  return { mid, up, lo };
+}
+
+const crossUp = (a, b, i) => i > 0 && a[i - 1] != null && b[i - 1] != null && a[i] != null && b[i] != null && a[i - 1] <= b[i - 1] && a[i] > b[i];
+const crossDn = (a, b, i) => i > 0 && a[i - 1] != null && b[i - 1] != null && a[i] != null && b[i] != null && a[i - 1] >= b[i - 1] && a[i] < b[i];
+
+/* =========================================================
+   3. 訊號檢測
+   ========================================================= */
+const SIG = {
+  maGolden:  { t: "均線黃金交叉", dir: 1,  w: 2, why: p => `MA${p.maFast} 由下往上穿過 MA${p.maMid}` },
+  maDeath:   { t: "均線死亡交叉", dir: -1, w: 2, why: p => `MA${p.maFast} 由上往下跌破 MA${p.maMid}` },
+  aboveSlow: { t: "站上長期均線", dir: 1,  w: 2, why: p => `收盤重新站上 MA${p.maSlow}` },
+  belowSlow: { t: "跌破長期均線", dir: -1, w: 2, why: p => `收盤跌破 MA${p.maSlow}` },
+  kdGolden:  { t: "KD 黃金交叉", dir: 1,  w: 1, why: () => "K 值向上穿越 D 值" },
+  kdGoldenL: { t: "低檔 KD 交叉", dir: 1,  w: 2, why: () => "K 值在 30 以下向上穿越 D 值" },
+  kdDeath:   { t: "KD 死亡交叉", dir: -1, w: 1, why: () => "K 值向下跌破 D 值" },
+  kdDeathH:  { t: "高檔 KD 交叉", dir: -1, w: 2, why: () => "K 值在 70 以上向下跌破 D 值" },
+  macdUp:    { t: "MACD 柱翻正", dir: 1,  w: 2, why: () => "柱狀體由負轉正,短期動能轉強" },
+  macdDn:    { t: "MACD 柱翻負", dir: -1, w: 2, why: () => "柱狀體由正轉負,短期動能轉弱" },
+  rsiHi:     { t: "RSI 超買", dir: -1, w: 1, why: p => `RSI ${p.rsiLen} 高於 ${p.rsiHi}` },
+  rsiLo:     { t: "RSI 超賣", dir: 1,  w: 1, why: p => `RSI ${p.rsiLen} 低於 ${p.rsiLo}` },
+  bollUp:    { t: "突破布林上軌", dir: -1, w: 1, why: () => "收盤高於 20 日 +2 標準差,短線偏熱" },
+  bollDn:    { t: "跌破布林下軌", dir: 1,  w: 1, why: () => "收盤低於 20 日 −2 標準差,短線超跌" },
+  volSpike:  { t: "爆量", dir: 0, w: 0, why: p => `成交量達 5 日均量的 ${p.volMult} 倍以上` },
+  volDry:    { t: "量縮", dir: 0, w: 0, why: () => "成交量不足 5 日均量的一半" },
+  biasHi:    { t: "正乖離過大", dir: -1, w: 1, why: p => `距 MA${p.maMid} 正乖離超過 ${p.bias}%` },
+  biasLo:    { t: "負乖離過大", dir: 1,  w: 1, why: p => `距 MA${p.maMid} 負乖離超過 ${p.bias}%` },
+  streakUp:  { t: "連續收紅", dir: 1, w: 1, why: n => `已連續 ${n} 日收高` },
+  streakDn:  { t: "連續收黑", dir: -1, w: 1, why: n => `已連續 ${n} 日收低` }
+};
+
+function analyze(ds, p) {
+  const bars = ds.bars;
+  const closes = bars.map(b => b.c);
+  const vols = bars.map(b => b.v);
+  const n = bars.length;
+
+  const ind = {
+    maFast: sma(closes, p.maFast),
+    maMid: sma(closes, p.maMid),
+    maSlow: sma(closes, p.maSlow),
+    rsi: rsi(closes, p.rsiLen),
+    volMa: sma(vols, 5)
+  };
+  const m = macd(closes); ind.dif = m.dif; ind.dea = m.dea; ind.hist = m.hist;
+  const k = kdj(bars, 9); ind.k = k.k; ind.d = k.d;
+  const bb = bollinger(closes, 20, 2); ind.bbMid = bb.mid; ind.bbUp = bb.up; ind.bbLo = bb.lo;
+  ind.bias = closes.map((c, i) => ind.maMid[i] == null ? null : (c - ind.maMid[i]) / ind.maMid[i] * 100);
+
+  // 每一根 K 棒上的事件
+  const events = [];
+  const push = (i, key, arg) => {
+    const def = SIG[key];
+    events.push({ i, d: bars[i].d, key, title: def.t, dir: def.dir, w: def.w, why: def.why(arg === undefined ? p : arg) });
+  };
+
+  for (let i = 1; i < n; i++) {
+    if (crossUp(ind.maFast, ind.maMid, i)) push(i, "maGolden");
+    if (crossDn(ind.maFast, ind.maMid, i)) push(i, "maDeath");
+    if (ind.maSlow[i] != null && ind.maSlow[i - 1] != null) {
+      if (closes[i - 1] <= ind.maSlow[i - 1] && closes[i] > ind.maSlow[i]) push(i, "aboveSlow");
+      if (closes[i - 1] >= ind.maSlow[i - 1] && closes[i] < ind.maSlow[i]) push(i, "belowSlow");
+    }
+    if (crossUp(ind.k, ind.d, i)) push(i, ind.k[i] < 30 ? "kdGoldenL" : "kdGolden");
+    if (crossDn(ind.k, ind.d, i)) push(i, ind.k[i] > 70 ? "kdDeathH" : "kdDeath");
+    if (ind.hist[i] != null && ind.hist[i - 1] != null) {
+      if (ind.hist[i - 1] <= 0 && ind.hist[i] > 0) push(i, "macdUp");
+      if (ind.hist[i - 1] >= 0 && ind.hist[i] < 0) push(i, "macdDn");
+    }
+    if (ind.volMa[i] != null && ind.volMa[i] > 0) {
+      if (vols[i] >= ind.volMa[i] * p.volMult) push(i, "volSpike");
+      else if (vols[i] <= ind.volMa[i] * 0.5) push(i, "volDry");
+    }
+  }
+
+  // 最新一根的狀態型訊號
+  const last = n - 1;
+  const stateSigs = [];
+  const sPush = (key, arg) => {
+    const def = SIG[key];
+    stateSigs.push({ i: last, d: bars[last].d, key, title: def.t, dir: def.dir, w: def.w, why: def.why(arg === undefined ? p : arg) });
+  };
+  if (ind.rsi[last] != null) {
+    if (ind.rsi[last] > p.rsiHi) sPush("rsiHi");
+    else if (ind.rsi[last] < p.rsiLo) sPush("rsiLo");
+  }
+  if (ind.bbUp[last] != null) {
+    if (closes[last] > ind.bbUp[last]) sPush("bollUp");
+    else if (closes[last] < ind.bbLo[last]) sPush("bollDn");
+  }
+  if (ind.bias[last] != null) {
+    if (ind.bias[last] > p.bias) sPush("biasHi");
+    else if (ind.bias[last] < -p.bias) sPush("biasLo");
+  }
+  let streakDir = 0, streakLen = 0;
+  for (let i = last; i > 0; i--) {
+    const dir = Math.sign(closes[i] - closes[i - 1]);
+    if (dir === 0) break;
+    if (streakDir === 0) streakDir = dir;
+    else if (dir !== streakDir) break;
+    streakLen++;
+  }
+  if (streakLen >= 3) sPush(streakDir > 0 ? "streakUp" : "streakDn", streakLen);
+
+  // 最新訊號 = 最近 3 根 K 棒的事件 + 當日狀態
+  const recent = events.filter(e => e.i >= n - 3).map(e => ({ ...e, age: last - e.i }));
+  const current = [...recent, ...stateSigs.map(e => ({ ...e, age: 0 }))];
+  const score = current.reduce((s, e) => s + e.dir * e.w, 0);
+
+  const prevClose = n > 1 ? closes[n - 2] : closes[last];
+  const chg = closes[last] - prevClose;
+
+  return {
+    id: ds.id, name: ds.name, demo: ds.demo, note: ds.note, bars, ind, events, current, score,
+    last, close: closes[last], chg, chgPct: prevClose ? chg / prevClose * 100 : 0,
+    volRatio: ind.volMa[last] ? vols[last] / ind.volMa[last] : null
+  };
+}
+
+function verdict(score) {
+  if (score >= 4) return { label: "偏多", cls: "up" };
+  if (score >= 2) return { label: "轉強", cls: "up" };
+  if (score <= -4) return { label: "偏空", cls: "down" };
+  if (score <= -2) return { label: "轉弱", cls: "down" };
+  return { label: "中性", cls: "flat" };
+}
+
+/* =========================================================
+   4. 資料解析
+   ========================================================= */
+const FIELD_PATTERNS = [
+  ["d", /日\s*期|date|時間|年月日/i],
+  ["o", /開盤|開市|^開$|\bopen\b/i],
+  ["h", /最高|^高$|\bhigh\b/i],
+  ["l", /最低|^低$|\blow\b/i],
+  ["c", /收盤|^收$|adj\s*close|\bclose\b|價格|\bprice\b/i],
+  ["v", /成交股數|成交量|成交數量|^量$|\bvolume\b|\bvol\b/i]
+];
+
+function parseNum(s) {
+  if (s == null) return NaN;
+  const t = String(s).replace(/[",\s%]/g, "").replace(/^\+/, "");
+  if (t === "" || t === "--" || t === "-" || t === "X" || t === "null") return NaN;
+  const v = Number(t);
+  return Number.isFinite(v) ? v : NaN;
+}
+
+function parseDate(s) {
+  if (s == null) return null;
+  const t = String(s).trim().replace(/["']/g, "").replace(/\s+.*$/, "");
+  let m = t.match(/^(\d{1,4})[/\-.](\d{1,2})[/\-.](\d{1,2})$/);
+  if (m) {
+    let y = +m[1];
+    if (y < 1911) y += 1911;
+    return iso(y, +m[2], +m[3]);
+  }
+  m = t.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (m) return iso(+m[1], +m[2], +m[3]);
+  m = t.match(/^(\d{3})(\d{2})(\d{2})$/);
+  if (m) return iso(+m[1] + 1911, +m[2], +m[3]);
+  return null;
+}
+function iso(y, mo, d) {
+  if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return null;
+  return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+}
+
+function splitRow(line, useTab) {
+  if (useTab) return line.split("\t").map(s => s.trim());
+  const out = []; let cur = "", q = false;
+  for (const ch of line) {
+    if (ch === '"') { q = !q; continue; }
+    if (ch === "," && !q) { out.push(cur.trim()); cur = ""; continue; }
+    cur += ch;
+  }
+  out.push(cur.trim());
+  return out;
+}
+
+function parseSeries(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l && !/^[-=\s|]+$/.test(l));
+  if (!lines.length) throw new Error("沒有讀到任何資料。");
+  const useTab = lines.some(l => l.includes("\t"));
+
+  let rows = lines.map(l => splitRow(l, useTab)).filter(r => r.length >= 2);
+  if (!rows.length) throw new Error("每一列至少要有兩個欄位(日期與收盤價)。");
+
+  // 標題列判讀
+  let map = null;
+  const first = rows[0];
+  if (parseDate(first[0]) == null) {
+    map = {};
+    const taken = new Set();
+    first.forEach((cell, idx) => {
+      for (const [field, re] of FIELD_PATTERNS) {
+        if (taken.has(field)) continue;
+        if (re.test(cell)) { map[field] = idx; taken.add(field); break; }
+      }
+    });
+    rows = rows.slice(1);
+    if (map.d == null || map.c == null) map = null;
+  }
+
+  if (!map) {
+    const w = rows[0].length;
+    map = w >= 6 ? { d: 0, o: 1, h: 2, l: 3, c: 4, v: 5 }
+        : w === 5 ? { d: 0, o: 1, h: 2, l: 3, c: 4 }
+        : w >= 3  ? { d: 0, c: 1, v: 2 }
+        : { d: 0, c: 1 };
+  }
+
+  const bars = [];
+  for (const r of rows) {
+    const d = parseDate(r[map.d]);
+    if (!d) continue;
+    const c = parseNum(r[map.c]);
+    if (!Number.isFinite(c) || c <= 0) continue;
+    const o = map.o != null ? parseNum(r[map.o]) : NaN;
+    const h = map.h != null ? parseNum(r[map.h]) : NaN;
+    const l = map.l != null ? parseNum(r[map.l]) : NaN;
+    const v = map.v != null ? parseNum(r[map.v]) : NaN;
+    bars.push({
+      d,
+      o: Number.isFinite(o) && o > 0 ? o : c,
+      h: Number.isFinite(h) && h > 0 ? h : Math.max(c, Number.isFinite(o) ? o : c),
+      l: Number.isFinite(l) && l > 0 ? l : Math.min(c, Number.isFinite(o) ? o : c),
+      c,
+      v: Number.isFinite(v) && v >= 0 ? v : 0
+    });
+  }
+  if (bars.length < 30) throw new Error(`只解析出 ${bars.length} 筆有效資料,至少需要 30 筆才算得出長期均線。請確認日期與價格欄位。`);
+
+  bars.sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+  const dedup = [];
+  for (const b of bars) { if (!dedup.length || dedup[dedup.length - 1].d !== b.d) dedup.push(b); else dedup[dedup.length - 1] = b; }
+  return dedup;
+}
+
+/* =========================================================
+   5. 示範資料(明確標示,非真實行情)
+   ========================================================= */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function tradingDays(count, endISO) {
+  const out = []; const d = new Date(endISO + "T00:00:00Z");
+  while (out.length < count) {
+    const dow = d.getUTCDay();
+    if (dow !== 0 && dow !== 6) out.push(d.toISOString().slice(0, 10));
+    d.setUTCDate(d.getUTCDate() - 1);
+  }
+  return out.reverse();
+}
+
+function makeDemo(id, name, note, seed, start, driftFn, vol, baseVol) {
+  const rnd = mulberry32(seed);
+  const n = 260;
+  const dates = tradingDays(n, "2026-09-04");
+  const bars = [];
+  let c = start;
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const ret = driftFn(t) + (rnd() - 0.5) * 2 * vol;
+    const prev = c;
+    c = Math.max(1, prev * (1 + ret));
+    const o = prev * (1 + (rnd() - 0.5) * vol * 0.6);
+    const hi = Math.max(o, c) * (1 + rnd() * vol * 0.55);
+    const lo = Math.min(o, c) * (1 - rnd() * vol * 0.55);
+    const shock = Math.min(3, 1 + Math.abs(ret) / vol * 0.9);
+    const v = Math.round(baseVol * (0.6 + rnd() * 0.8) * shock);
+    const r2 = x => Math.round(x * 100) / 100;
+    bars.push({ d: dates[i], o: r2(o), h: r2(hi), l: r2(lo), c: r2(c), v });
+  }
+  return { id, name, demo: true, note, bars };
+}
+
+function demoSets() {
+  return [
+    makeDemo("demo-trend", "示範標的 A", "多頭趨勢", 20260101, 118,
+      t => 0.0016 - 0.0022 * Math.sin(t * 7.5), 0.016, 9200),
+    makeDemo("demo-range", "示範標的 B", "區間盤整", 777001, 46.5,
+      t => -0.0009 * Math.sin(t * 12) + 0.0002, 0.013, 21000),
+    makeDemo("demo-break", "示範標的 C", "高檔轉弱", 424242, 205,
+      t => t < 0.58 ? 0.0019 : -0.0026, 0.019, 5400)
+  ];
+}
+
+/* =========================================================
+   6. 儲存
+   ========================================================= */
+const LS_KEY = "tw-signal-station:v1";
+const MAX_STORED_BARS = 1200;   // 單一文件上限 256 KiB,壓縮後約可放 4000 筆,留足餘裕
+
+// 文件 id 只允許英數與少數符號,所以另外產生,標的名稱存在文件內容裡
+function newId() {
+  return "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+
+// 存檔時把物件陣列壓成純陣列,體積約少一半
+const packBars = bars => bars.slice(-MAX_STORED_BARS).map(b => [b.d, b.o, b.h, b.l, b.c, b.v]);
+const unpackBars = rows => rows.map(r => Array.isArray(r)
+  ? { d: r[0], o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] }
+  : r);
+
+async function initStorage() {
+  try { localStorage.getItem(LS_KEY); storage.mode = "local"; } catch (e) { storage.mode = "memory"; }
+  if (typeof window.claude?.use !== "function") return;
+  try {
+    const db = await window.claude.use("db");
+    if (db) { storage.db = db; storage.mode = "db"; }
+  } catch (e) { /* 沒有 db 就繼續用本機 */ }
+}
+
+function saveLocal() {
+  if (storage.mode === "memory") return;
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      params: state.params, panels: state.panels, range: state.range,
+      datasets: state.datasets.filter(d => !d.demo).map(d => ({ id: d.id, name: d.name, note: d.note, rows: packBars(d.bars) }))
+    }));
+  } catch (e) { /* 空間不足就略過,db 仍是主要來源 */ }
+}
+
+function readLocal() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (Array.isArray(o.datasets)) {
+      o.datasets = o.datasets
+        .filter(d => d && Array.isArray(d.rows) && d.rows.length >= 30)
+        .map(d => ({ id: d.id, name: d.name, demo: false, note: d.note || "", bars: unpackBars(d.rows) }));
+    }
+    return o;
+  } catch (e) { return null; }
+}
+
+async function persist() {
+  saveLocal();
+  if (!storage.db) return;
+  try {
+    await storage.db.doc("station/settings").set({ params: state.params, panels: state.panels, range: state.range });
+  } catch (e) { /* 唯讀檢視或暫時無法連線 */ }
+}
+
+async function persistDataset(ds) {
+  saveLocal();
+  if (!storage.db) return true;
+  try {
+    await storage.db.doc("datasets/" + ds.id).set({
+      name: ds.name, note: ds.note || "", rows: packBars(ds.bars), addedAt: Date.now()
+    });
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+async function removePersisted(id) {
+  saveLocal();
+  if (!storage.db) return;
+  try { await storage.db.doc("datasets/" + id).delete(); } catch (e) { /* 唯讀檢視 */ }
+}
+
+async function hydrateFromDb() {
+  if (!storage.db) return false;
+  let changed = false;
+  try {
+    const snap = await storage.db.doc("station/settings").get();
+    if (snap.exists) {
+      const s = snap.data() || {};
+      if (s.params) { state.params = { ...DEFAULTS, ...s.params }; changed = true; }
+      if (s.panels) { state.panels = { ...state.panels, ...s.panels }; changed = true; }
+      if (typeof s.range === "number") { state.range = s.range; changed = true; }
+    }
+  } catch (e) { /* 沒有設定就用預設 */ }
+
+  try {
+    const qs = await storage.db.collection("datasets").get();
+    const loaded = [];
+    for (const doc of qs.docs) {
+      const data = doc.data();
+      if (!data || !Array.isArray(data.rows) || data.rows.length < 30) continue;
+      loaded.push({ id: doc.id, name: String(data.name || doc.id), demo: false, note: data.note || "", bars: unpackBars(data.rows) });
+    }
+    if (loaded.length) {
+      state.datasets = [...loaded, ...state.datasets.filter(d => d.demo)];
+      changed = true;
+    } else {
+      // 雲端還是空的:把本機既有的資料推上去
+      for (const ds of state.datasets.filter(d => !d.demo)) await persistDataset(ds);
+    }
+  } catch (e) { /* 沒有資料集就維持現況 */ }
+  return changed;
+}
+
+/* =========================================================
+   7. 格式化
+   ========================================================= */
+const nf = (v, d = 2) => v == null || !Number.isFinite(v) ? "—" : v.toLocaleString("zh-TW", { minimumFractionDigits: d, maximumFractionDigits: d });
+const nfInt = v => v == null || !Number.isFinite(v) ? "—" : Math.round(v).toLocaleString("zh-TW");
+const signed = (v, d = 2) => v == null || !Number.isFinite(v) ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") + nf(Math.abs(v), d);
+const dirCls = v => v > 0 ? "up" : v < 0 ? "down" : "flat";
+const arrow = v => v > 0 ? "▲" : v < 0 ? "▼" : "＝";
+const mdy = s => s ? s.slice(5).replace("-", "/") : "—";
+const scoreTxt = v => (v > 0 ? "+" : v < 0 ? "−" : "±") + Math.abs(v);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* =========================================================
+   8. 檢測站畫面
+   ========================================================= */
+function recomputeAll() {
+  state.analysis = {};
+  for (const ds of state.datasets) {
+    try { state.analysis[ds.id] = analyze(ds, state.params); }
+    catch (e) { /* 資料太短就略過 */ }
+  }
+  if (!state.selected || !state.analysis[state.selected]) {
+    state.selected = state.datasets.length ? state.datasets[0].id : null;
+  }
+}
+
+function sortedRows() {
+  const rows = state.datasets.map(d => state.analysis[d.id]).filter(Boolean);
+  const { key, dir } = state.sort;
+  const val = a => key === "name" ? a.name : key === "close" ? a.close : key === "chg" ? a.chgPct : a.score;
+  return rows.sort((a, b) => {
+    const x = val(a), y = val(b);
+    if (typeof x === "string") return dir * x.localeCompare(y, "zh-TW");
+    return dir * (x - y);
+  });
+}
+
+function renderStats() {
+  const rows = Object.values(state.analysis);
+  const bull = rows.filter(r => r.score >= 2).length;
+  const bear = rows.filter(r => r.score <= -2).length;
+  const dates = rows.map(r => r.bars[r.last].d).sort();
+  const latest = dates.length ? dates[dates.length - 1] : null;
+  const alerts = rows.reduce((s, r) => s + r.current.filter(e => e.w > 0).length, 0);
+
+  document.getElementById("statstrip").innerHTML = `
+    <div class="stat"><div class="stat-k">監測標的</div><div class="stat-v num">${rows.length}</div><div class="stat-sub">${state.datasets.filter(d => d.demo).length} 檔為示範資料</div></div>
+    <div class="stat"><div class="stat-k">偏多</div><div class="stat-v num up">${bull}</div><div class="stat-sub">診斷分數 ≥ +2</div></div>
+    <div class="stat"><div class="stat-k">偏空</div><div class="stat-v num down">${bear}</div><div class="stat-sub">診斷分數 ≤ −2</div></div>
+    <div class="stat"><div class="stat-k">觸發訊號</div><div class="stat-v num">${alerts}</div><div class="stat-sub">近 3 個交易日內</div></div>
+    <div class="stat"><div class="stat-k">資料截止</div><div class="stat-v num">${latest ? latest.slice(5).replace("-", "/") : "—"}</div><div class="stat-sub">${latest ? latest.slice(0, 4) + " 年" : "尚無資料"}</div></div>`;
+}
+
+function chipHtml(e) {
+  const cls = e.dir > 0 ? "chip-up" : e.dir < 0 ? "chip-down" : "chip-neutral";
+  const age = e.age > 0 ? `<span class="chip-age"> ${e.age}日前</span>` : "";
+  return `<span class="chip ${cls}" title="${esc(e.why)}">${esc(e.title)}${age}</span>`;
+}
+
+function renderScan() {
+  renderStats();
+  const rows = sortedRows();
+  const body = document.getElementById("scan-body");
+
+  if (!rows.length) {
+    body.innerHTML = `<tr><td colspan="7" style="padding:34px 16px;text-align:center;color:var(--ink-muted)">還沒有任何標的。按右上角「載入資料」貼上日線資料就能開始檢測。</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = rows.map(r => {
+    const v = verdict(r.score);
+    const pct = Math.max(-1, Math.min(1, r.score / 8));
+    const w = Math.abs(pct) * 48;
+    const fill = pct >= 0
+      ? `left:50%;width:${w}px;background:var(--up)`
+      : `right:50%;width:${w}px;background:var(--down)`;
+    const chips = r.current.length
+      ? r.current.slice().sort((a, b) => b.w - a.w).map(chipHtml).join("")
+      : `<span class="chip-none">無明顯訊號</span>`;
+    const vr = r.volRatio;
+    return `<tr data-id="${esc(r.id)}">
+      <td>
+        <div class="sym-name">${esc(r.name)}</div>
+        <div class="sym-meta">${r.demo ? `<span class="chip chip-demo">示範資料</span> ` : ""}${esc(r.note || (r.bars.length + " 筆日線"))}</div>
+      </td>
+      <td class="t-right num px">${nf(r.close)}</td>
+      <td class="t-right num ${dirCls(r.chg)}">${arrow(r.chg)} ${signed(r.chgPct)}%</td>
+      <td class="t-right num">${vr == null ? "—" : nf(vr, 2) + "×"}</td>
+      <td>
+        <div class="verdict">
+          <div class="vbar"><div class="vfill" style="${fill}"></div></div>
+          <span class="vlabel ${v.cls}">${v.label}</span>
+          <span class="num" style="font-size:12px;color:var(--ink-muted)">${scoreTxt(r.score)}</span>
+        </div>
+      </td>
+      <td><div class="chips">${chips}</div></td>
+      <td class="t-right"><button class="btn-ghost btn" data-del="${esc(r.id)}" title="移除這檔標的" aria-label="移除 ${esc(r.name)}">✕</button></td>
+    </tr>`;
+  }).join("");
+
+  document.querySelectorAll("th.sortable").forEach(th => {
+    const a = th.querySelector(".arrow");
+    a.textContent = state.sort.key === th.dataset.sort ? (state.sort.dir === 1 ? "▲" : "▼") : "";
+  });
+}
+
+/* =========================================================
+   9. 圖表
+   ========================================================= */
+const chartState = { padL: 8, padR: 52, panels: [], n: 0, i0: 0, bw: 0, W: 0, H: 0 };
+
+function visibleSlice(a) {
+  const n = a.bars.length;
+  const count = state.range === 0 ? n : Math.min(n, state.range);
+  return { i0: n - count, i1: n - 1, count };
+}
+
+function buildPanels() {
+  const P = [];
+  let y = 8;
+  const add = (key, h) => { P.push({ key, top: y, h }); y += h + 12; };
+  add("price", 320);
+  if (state.panels.vol) add("vol", 66);
+  if (state.panels.rsi) add("rsi", 86);
+  if (state.panels.macd) add("macd", 86);
+  if (state.panels.kd) add("kd", 86);
+  return { panels: P, height: y + 16 };
+}
+
+function extent(arrays, i0, i1) {
+  let lo = Infinity, hi = -Infinity;
+  for (const arr of arrays) {
+    for (let i = i0; i <= i1; i++) {
+      const v = arr[i];
+      if (v == null || !Number.isFinite(v)) continue;
+      if (v < lo) lo = v; if (v > hi) hi = v;
+    }
+  }
+  if (lo === Infinity) return [0, 1];
+  if (lo === hi) { lo -= 1; hi += 1; }
+  return [lo, hi];
+}
+
+function niceTicks(lo, hi, want) {
+  const span = hi - lo;
+  if (!(span > 0)) return [lo];
+  const raw = span / want;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const norm = raw / mag;
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+  const out = [];
+  for (let t = Math.ceil(lo / step) * step; t <= hi + 1e-9; t += step) out.push(t);
+  return out;
+}
+
+function renderChart() {
+  const host = document.getElementById("chart-host");
+  const a = state.analysis[state.selected];
+  if (!a) { host.innerHTML = ""; return; }
+
+  const W = Math.max(360, host.clientWidth || 900);
+  const { i0, i1, count } = visibleSlice(a);
+  const { panels, height } = buildPanels();
+  const padL = chartState.padL, padR = chartState.padR;
+  const plotW = W - padL - padR;
+  const bw = plotW / count;
+  Object.assign(chartState, { panels, n: count, i0, bw, W, H: height, plotW });
+
+  const x = i => padL + (i - i0 + 0.5) * bw;
+  const body = a.bars, ind = a.ind;
+  let s = "";
+
+  const yMake = (p, lo, hi) => v => p.top + p.h - ((v - lo) / (hi - lo)) * p.h;
+
+  const linePath = (arr, y) => {
+    let d = "", pen = false;
+    for (let i = i0; i <= i1; i++) {
+      const v = arr[i];
+      if (v == null || !Number.isFinite(v)) { pen = false; continue; }
+      d += (pen ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1) + " ";
+      pen = true;
+    }
+    return d;
+  };
+
+  for (const p of panels) {
+    if (p.key === "price") {
+      const arrays = [body.map(b => b.h), body.map(b => b.l), ind.maFast, ind.maMid, ind.maSlow];
+      if (state.panels.boll) arrays.push(ind.bbUp, ind.bbLo);
+      let [lo, hi] = extent(arrays, i0, i1);
+      const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
+      const y = yMake(p, lo, hi);
+
+      for (const t of niceTicks(lo, hi, 5)) {
+        const yy = y(t).toFixed(1);
+        s += `<line class="c-grid" x1="${padL}" y1="${yy}" x2="${padL + plotW}" y2="${yy}"/>`;
+        s += `<text class="c-txt" x="${padL + plotW + 6}" y="${(+yy + 3.5).toFixed(1)}">${nf(t, hi - lo > 40 ? 0 : 1)}</text>`;
+      }
+
+      if (state.panels.boll) {
+        let up = "", dn = "";
+        for (let i = i0; i <= i1; i++) if (ind.bbUp[i] != null) up += `${up ? "L" : "M"}${x(i).toFixed(1)} ${y(ind.bbUp[i]).toFixed(1)} `;
+        for (let i = i1; i >= i0; i--) if (ind.bbLo[i] != null) dn += `L${x(i).toFixed(1)} ${y(ind.bbLo[i]).toFixed(1)} `;
+        if (up && dn) s += `<path class="c-boll-fill" d="${up}${dn}Z"/>`;
+        s += `<path class="c-boll" d="${linePath(ind.bbUp, y)}"/><path class="c-boll" d="${linePath(ind.bbLo, y)}"/>`;
+      }
+
+      const cw = Math.max(1, Math.min(9, bw * 0.62));
+      for (let i = i0; i <= i1; i++) {
+        const b = body[i];
+        const up = b.c >= b.o;
+        const cls = up ? "c-up" : "c-down";
+        const cx = x(i);
+        s += `<line class="${cls}" x1="${cx.toFixed(1)}" y1="${y(b.h).toFixed(1)}" x2="${cx.toFixed(1)}" y2="${y(b.l).toFixed(1)}" stroke-width="1"/>`;
+        const y1 = y(Math.max(b.o, b.c)), y2 = y(Math.min(b.o, b.c));
+        s += `<rect class="${cls}" x="${(cx - cw / 2).toFixed(1)}" y="${y1.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1, y2 - y1).toFixed(1)}"${up ? "" : ""}/>`;
+      }
+
+      s += `<path class="c-ma-slow" d="${linePath(ind.maSlow, y)}"/>`;
+      s += `<path class="c-ma-mid" d="${linePath(ind.maMid, y)}"/>`;
+      s += `<path class="c-ma-fast" d="${linePath(ind.maFast, y)}"/>`;
+      s += `<text class="c-txt-lbl" x="${padL + 4}" y="${p.top + 13}">價格 ・ 均線</text>`;
+      p.scale = { lo, hi, y };
+    }
+
+    if (p.key === "vol") {
+      const [, hiV] = extent([body.map(b => b.v), ind.volMa], i0, i1);
+      const y = yMake(p, 0, hiV * 1.08);
+      s += `<rect class="c-panelbg" x="${padL}" y="${p.top}" width="${plotW}" height="${p.h}" rx="2"/>`;
+      const cw = Math.max(1, Math.min(9, bw * 0.62));
+      for (let i = i0; i <= i1; i++) {
+        const b = body[i];
+        const cls = (i > 0 ? b.c >= body[i - 1].c : b.c >= b.o) ? "c-up" : "c-down";
+        const yy = y(b.v);
+        s += `<rect class="${cls}" x="${(x(i) - cw / 2).toFixed(1)}" y="${yy.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1, p.top + p.h - yy).toFixed(1)}" opacity="0.62"/>`;
+      }
+      s += `<path class="c-ma-mid" d="${linePath(ind.volMa, y)}"/>`;
+      s += `<text class="c-txt-lbl" x="${padL + 4}" y="${p.top + 13}">成交量</text>`;
+      s += `<text class="c-txt" x="${padL + plotW + 6}" y="${p.top + 11}">${nfInt(hiV)}</text>`;
+      p.scale = { lo: 0, hi: hiV * 1.08, y };
+    }
+
+    if (p.key === "rsi") {
+      const y = yMake(p, 0, 100);
+      s += `<rect class="c-band" x="${padL}" y="${y(state.params.rsiHi).toFixed(1)}" width="${plotW}" height="${(y(state.params.rsiLo) - y(state.params.rsiHi)).toFixed(1)}"/>`;
+      for (const t of [state.params.rsiHi, 50, state.params.rsiLo]) {
+        s += `<line class="c-ref" x1="${padL}" y1="${y(t).toFixed(1)}" x2="${padL + plotW}" y2="${y(t).toFixed(1)}"/>`;
+        s += `<text class="c-txt" x="${padL + plotW + 6}" y="${(y(t) + 3.5).toFixed(1)}">${t}</text>`;
+      }
+      s += `<path class="c-ma-fast" d="${linePath(ind.rsi, y)}"/>`;
+      s += `<text class="c-txt-lbl" x="${padL + 4}" y="${p.top + 13}">RSI ${state.params.rsiLen}</text>`;
+      p.scale = { lo: 0, hi: 100, y };
+    }
+
+    if (p.key === "macd") {
+      let [lo, hi] = extent([ind.dif, ind.dea, ind.hist], i0, i1);
+      const m = Math.max(Math.abs(lo), Math.abs(hi)) * 1.12 || 1;
+      const y = yMake(p, -m, m);
+      s += `<line class="c-axis" x1="${padL}" y1="${y(0).toFixed(1)}" x2="${padL + plotW}" y2="${y(0).toFixed(1)}"/>`;
+      const cw = Math.max(1, Math.min(7, bw * 0.5));
+      for (let i = i0; i <= i1; i++) {
+        const v = ind.hist[i];
+        if (v == null) continue;
+        const yy = Math.min(y(v), y(0)), hgt = Math.abs(y(v) - y(0));
+        s += `<rect class="${v >= 0 ? "c-up" : "c-down"}" x="${(x(i) - cw / 2).toFixed(1)}" y="${yy.toFixed(1)}" width="${cw.toFixed(1)}" height="${Math.max(1, hgt).toFixed(1)}" opacity="0.72"/>`;
+      }
+      s += `<path class="c-ma-mid" d="${linePath(ind.dea, y)}"/>`;
+      s += `<path class="c-ma-fast" d="${linePath(ind.dif, y)}"/>`;
+      s += `<text class="c-txt-lbl" x="${padL + 4}" y="${p.top + 13}">MACD 12/26/9</text>`;
+      s += `<text class="c-txt" x="${padL + plotW + 6}" y="${(p.top + 11).toFixed(1)}">${nf(m, 2)}</text>`;
+      s += `<text class="c-txt" x="${padL + plotW + 6}" y="${(p.top + p.h - 2).toFixed(1)}">−${nf(m, 2)}</text>`;
+      p.scale = { lo: -m, hi: m, y };
+    }
+
+    if (p.key === "kd") {
+      const y = yMake(p, 0, 100);
+      s += `<rect class="c-band" x="${padL}" y="${y(80).toFixed(1)}" width="${plotW}" height="${(y(20) - y(80)).toFixed(1)}"/>`;
+      for (const t of [80, 50, 20]) {
+        s += `<line class="c-ref" x1="${padL}" y1="${y(t).toFixed(1)}" x2="${padL + plotW}" y2="${y(t).toFixed(1)}"/>`;
+        s += `<text class="c-txt" x="${padL + plotW + 6}" y="${(y(t) + 3.5).toFixed(1)}">${t}</text>`;
+      }
+      s += `<path class="c-ma-mid" d="${linePath(ind.d, y)}"/>`;
+      s += `<path class="c-ma-fast" d="${linePath(ind.k, y)}"/>`;
+      s += `<text class="c-txt-lbl" x="${padL + 4}" y="${p.top + 13}">KD 9,3,3</text>`;
+      p.scale = { lo: 0, hi: 100, y };
+    }
+  }
+
+  // 日期軸
+  const axisY = height - 6;
+  const step = Math.max(1, Math.floor(count / 6));
+  for (let i = i0; i <= i1; i += step) {
+    const cx = x(i);
+    // 靠邊的標籤改變錨點,才不會被裁掉
+    const anchor = cx < 24 ? "start" : cx > padL + plotW - 24 ? "end" : "middle";
+    s += `<line class="c-grid" x1="${cx.toFixed(1)}" y1="8" x2="${cx.toFixed(1)}" y2="${height - 20}" opacity="0.55"/>`;
+    s += `<text class="c-txt" x="${cx.toFixed(1)}" y="${axisY}" text-anchor="${anchor}">${mdy(body[i].d)}</text>`;
+  }
+
+  s += `<line id="crosshair" class="c-cross" x1="0" y1="8" x2="0" y2="${height - 20}" style="display:none"/>`;
+  s += `<rect id="hit" class="c-hit" x="${padL}" y="0" width="${plotW}" height="${height - 18}"/>`;
+
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${height}" width="${W}" height="${height}" role="img" aria-label="${esc(a.name)} 技術線圖">${s}</svg>`;
+
+  const hit = document.getElementById("hit");
+  hit.addEventListener("mousemove", onHover);
+  hit.addEventListener("mouseleave", () => { state.hoverIdx = null; updateCrosshair(); renderReadout(); });
+  hit.addEventListener("touchmove", ev => { if (ev.touches[0]) { onHover(ev.touches[0]); ev.preventDefault(); } }, { passive: false });
+}
+
+function onHover(ev) {
+  const svg = document.querySelector("#chart-host svg");
+  if (!svg) return;
+  const r = svg.getBoundingClientRect();
+  const px = (ev.clientX - r.left) * (chartState.W / r.width);
+  let idx = Math.floor((px - chartState.padL) / chartState.bw) + chartState.i0;
+  const a = state.analysis[state.selected];
+  idx = Math.max(chartState.i0, Math.min(a.bars.length - 1, idx));
+  if (idx !== state.hoverIdx) { state.hoverIdx = idx; updateCrosshair(); renderReadout(); }
+}
+
+function updateCrosshair() {
+  const el = document.getElementById("crosshair");
+  if (!el) return;
+  if (state.hoverIdx == null) { el.style.display = "none"; return; }
+  const cx = chartState.padL + (state.hoverIdx - chartState.i0 + 0.5) * chartState.bw;
+  el.setAttribute("x1", cx); el.setAttribute("x2", cx);
+  el.style.display = "";
+}
+
+/* =========================================================
+   10. 個股分析畫面
+   ========================================================= */
+function renderReadout() {
+  const a = state.analysis[state.selected];
+  if (!a) return;
+  const i = state.hoverIdx == null ? a.last : state.hoverIdx;
+  const b = a.bars[i], ind = a.ind;
+  const prev = i > 0 ? a.bars[i - 1].c : b.c;
+  const chg = b.c - prev, pct = prev ? chg / prev * 100 : 0;
+  const cell = (k, v, cls = "", extra = "") =>
+    `<div class="ro ${extra}"><div class="ro-k">${k}</div><div class="ro-v num ${cls}">${v}</div></div>`;
+
+  document.getElementById("readout").innerHTML =
+    cell("日期", b.d.replace(/-/g, "/"), "", "ro-date") +
+    cell("開", nf(b.o)) + cell("高", nf(b.h)) + cell("低", nf(b.l)) +
+    cell("收", nf(b.c), dirCls(chg)) +
+    cell("漲跌", `${arrow(chg)} ${signed(chg)} (${signed(pct)}%)`, dirCls(chg)) +
+    cell("量", nfInt(b.v)) +
+    cell(`MA${state.params.maFast}`, nf(ind.maFast[i])) +
+    cell(`MA${state.params.maMid}`, nf(ind.maMid[i])) +
+    cell(`MA${state.params.maSlow}`, nf(ind.maSlow[i])) +
+    cell("RSI", nf(ind.rsi[i], 1)) +
+    cell("K / D", `${nf(ind.k[i], 1)} / ${nf(ind.d[i], 1)}`) +
+    cell("MACD 柱", signed(ind.hist[i]), dirCls(ind.hist[i] || 0)) +
+    (state.hoverIdx == null ? "" : `<div class="ro"><div class="ro-k">　</div><div class="ro-v" style="font-size:12px;color:var(--ink-muted)">游標位置</div></div>`);
+}
+
+function renderLegend() {
+  const p = state.params;
+  const items = [
+    [`MA${p.maFast}`, "var(--ma-fast)"], [`MA${p.maMid}`, "var(--ma-mid)"], [`MA${p.maSlow}`, "var(--ma-slow)"],
+    ["上漲 / 多方", "var(--up)"], ["下跌 / 空方", "var(--down)"]
+  ];
+  if (state.panels.boll) items.splice(3, 0, ["布林 ±2σ", "var(--ink-muted)"]);
+  document.getElementById("legendrow").innerHTML =
+    items.map(([t, c]) => `<span class="lg"><i style="background:${c}"></i>${esc(t)}</span>`).join("") +
+    (state.panels.macd || state.panels.kd ? `<span class="lg" style="opacity:.8">下方面板:快線為藍、慢線為橘</span>` : "");
+}
+
+function renderMetrics() {
+  const a = state.analysis[state.selected];
+  if (!a) return;
+  const i = a.last, ind = a.ind, p = state.params;
+  const v = verdict(a.score);
+  const items = [
+    ["診斷", `<span class="${v.cls}">${v.label} ${scoreTxt(a.score)}</span>`, "多空訊號加權後淨值"],
+    ["收盤", nf(a.close), `${arrow(a.chg)} ${signed(a.chgPct)}%`],
+    [`RSI ${p.rsiLen}`, nf(ind.rsi[i], 1), ind.rsi[i] == null ? "" : ind.rsi[i] > p.rsiHi ? "超買區" : ind.rsi[i] < p.rsiLo ? "超賣區" : "中性區"],
+    ["K / D", `${nf(ind.k[i], 1)} / ${nf(ind.d[i], 1)}`, ind.k[i] > ind.d[i] ? "K 在 D 之上" : "K 在 D 之下"],
+    ["MACD 柱", signed(ind.hist[i]), `DIF ${nf(ind.dif[i])}`],
+    [`乖離 ${p.maMid}日`, ind.bias[i] == null ? "—" : signed(ind.bias[i], 1) + "%", `MA${p.maMid} ${nf(ind.maMid[i])}`],
+    ["量能比", a.volRatio == null ? "—" : nf(a.volRatio, 2) + "×", "對 5 日均量"],
+    ["布林位置", ind.bbUp[i] == null ? "—" : nf((a.close - ind.bbLo[i]) / (ind.bbUp[i] - ind.bbLo[i]) * 100, 0) + "%", "0% 下軌 ・ 100% 上軌"]
+  ];
+  document.getElementById("metrics").innerHTML = items.map(([k, val, sub]) =>
+    `<div><div class="metric-k">${esc(k)}</div><div class="metric-v num">${val}</div><div class="metric-s">${esc(sub || "")}</div></div>`).join("");
+  document.getElementById("metrics-date").textContent = a.bars[i].d.replace(/-/g, "/") + " 收盤";
+}
+
+function renderEvents() {
+  const a = state.analysis[state.selected];
+  if (!a) return;
+  const { i0 } = visibleSlice(a);
+  const list = a.events.filter(e => e.i >= i0 && e.w > 0).slice().reverse().slice(0, 60);
+  const note = document.getElementById("events-note");
+  note.textContent = `期間內 ${list.length} 筆`;
+  const el = document.getElementById("events");
+  if (!list.length) { el.innerHTML = `<p class="ai-hint" style="margin:6px 0">這段期間沒有觸發交叉類訊號。</p>`; return; }
+  el.innerHTML = list.map(e => {
+    const c = e.dir > 0 ? "var(--up)" : e.dir < 0 ? "var(--down)" : "var(--ink-muted)";
+    return `<div class="ev">
+      <div class="ev-d num">${e.d.slice(5).replace("-", "/")}</div>
+      <div class="ev-b"><div class="ev-t"><span class="ev-dot" style="background:${c}"></span>${esc(e.title)}</div><div class="ev-x">${esc(e.why)}</div></div>
+    </div>`;
+  }).join("");
+}
+
+function renderDetail() {
+  const sel = document.getElementById("sel-symbol");
+  sel.innerHTML = state.datasets.map(d =>
+    `<option value="${esc(d.id)}"${d.id === state.selected ? " selected" : ""}>${esc(d.name)}${d.demo ? "(示範)" : ""}</option>`).join("");
+  const a = state.analysis[state.selected];
+  document.getElementById("demo-banner").hidden = !(a && a.demo);
+  document.getElementById("ai-out").textContent = "";
+  document.querySelectorAll("[data-range]").forEach(b => b.classList.toggle("is-on", +b.dataset.range === state.range));
+  document.querySelectorAll("[data-panel]").forEach(b => b.classList.toggle("is-on", !!state.panels[b.dataset.panel]));
+  state.hoverIdx = null;
+  if (!a) return;
+  renderChart(); renderReadout(); renderLegend(); renderMetrics(); renderEvents();
+}
+
+function render() {
+  document.getElementById("view-scan").hidden = state.view !== "scan";
+  document.getElementById("view-detail").hidden = state.view !== "detail";
+  document.querySelectorAll("#viewtabs button").forEach(b => b.classList.toggle("is-active", b.dataset.view === state.view));
+  if (state.view === "scan") renderScan(); else renderDetail();
+}
+
+/* =========================================================
+   11. 事件繫結
+   ========================================================= */
+document.getElementById("viewtabs").addEventListener("click", ev => {
+  const b = ev.target.closest("button[data-view]");
+  if (!b) return;
+  state.view = b.dataset.view; render();
+});
+
+document.getElementById("scan-body").addEventListener("click", async ev => {
+  const del = ev.target.closest("button[data-del]");
+  if (del) {
+    ev.stopPropagation();
+    const id = del.dataset.del;
+    const ds = state.datasets.find(d => d.id === id);
+    if (!ds) return;
+    if (!confirm(`確定要移除「${ds.name}」嗎?`)) return;
+    state.datasets = state.datasets.filter(d => d.id !== id);
+    if (state.selected === id) state.selected = null;
+    await removePersisted(id);
+    recomputeAll(); render();
+    return;
+  }
+  const tr = ev.target.closest("tr[data-id]");
+  if (!tr) return;
+  state.selected = tr.dataset.id;
+  state.view = "detail";
+  render();
+});
+
+document.querySelectorAll("th.sortable").forEach(th => th.addEventListener("click", () => {
+  const k = th.dataset.sort;
+  if (state.sort.key === k) state.sort.dir *= -1;
+  else state.sort = { key: k, dir: k === "name" ? 1 : -1 };
+  renderScan();
+}));
+
+document.getElementById("sel-symbol").addEventListener("change", e => { state.selected = e.target.value; renderDetail(); });
+
+document.querySelectorAll("[data-range]").forEach(b => b.addEventListener("click", () => {
+  state.range = +b.dataset.range; persist(); renderDetail();
+}));
+
+document.querySelectorAll("[data-panel]").forEach(b => b.addEventListener("click", () => {
+  state.panels[b.dataset.panel] = !state.panels[b.dataset.panel]; persist(); renderDetail();
+}));
+
+/* --- 載入資料 --- */
+const dlgImport = document.getElementById("dlg-import");
+document.getElementById("btn-import").addEventListener("click", () => {
+  document.getElementById("in-err").textContent = "";
+  dlgImport.showModal();
+});
+
+document.getElementById("btn-add").addEventListener("click", async () => {
+  const errEl = document.getElementById("in-err");
+  const name = document.getElementById("in-name").value.trim();
+  const text = document.getElementById("in-data").value;
+  errEl.textContent = "";
+  if (!name) { errEl.textContent = "請先填標的名稱。"; return; }
+  if (!text.trim()) { errEl.textContent = "請貼上日線資料。"; return; }
+  let bars;
+  try { bars = parseSeries(text); }
+  catch (e) { errEl.textContent = e.message; return; }
+
+  const ds = { id: newId(), name, demo: false, note: `${bars.length} 筆日線`, bars };
+  state.datasets = [ds, ...state.datasets];
+  state.selected = ds.id;
+  recomputeAll();
+  const ok = await persistDataset(ds);
+  document.getElementById("in-name").value = "";
+  document.getElementById("in-data").value = "";
+  state.view = "detail";
+  render();
+  if (ok) dlgImport.close();
+  else errEl.textContent = `已加入「${ds.name}」並完成分析,但這次沒能存到雲端,重新整理後可能只留在這台裝置上。`;
+});
+
+document.getElementById("btn-demo").addEventListener("click", () => {
+  const have = new Set(state.datasets.map(d => d.id));
+  for (const d of demoSets()) if (!have.has(d.id)) state.datasets.push(d);
+  recomputeAll(); dlgImport.close(); state.view = "scan"; render();
+});
+
+/* --- 參數 --- */
+const dlgSettings = document.getElementById("dlg-settings");
+const PARAM_KEYS = ["maFast", "maMid", "maSlow", "rsiLen", "rsiHi", "rsiLo", "volMult", "bias"];
+
+function fillParams() { for (const k of PARAM_KEYS) document.getElementById("p-" + k).value = state.params[k]; }
+
+document.getElementById("btn-settings").addEventListener("click", () => { fillParams(); dlgSettings.showModal(); });
+document.getElementById("btn-reset-params").addEventListener("click", () => { state.params = { ...DEFAULTS }; fillParams(); });
+
+dlgSettings.addEventListener("close", async () => {
+  const next = { ...state.params };
+  for (const k of PARAM_KEYS) {
+    const v = Number(document.getElementById("p-" + k).value);
+    if (Number.isFinite(v) && v > 0) next[k] = k === "volMult" ? v : Math.round(v);
+  }
+  if (next.maFast >= next.maMid) next.maMid = next.maFast + 5;
+  if (next.maMid >= next.maSlow) next.maSlow = next.maMid + 10;
+  if (next.rsiLo >= next.rsiHi) { next.rsiLo = DEFAULTS.rsiLo; next.rsiHi = DEFAULTS.rsiHi; }
+  state.params = next;
+  await persist();
+  recomputeAll(); render();
+});
+
+/* --- AI 摘要 --- */
+async function setupAi() {
+  if (typeof window.claude?.use !== "function") return;
+  let sample;
+  try { sample = await window.claude.use("sample"); } catch (e) { return; }
+  if (!sample) return;
+  const card = document.getElementById("ai-card");
+  card.hidden = false;
+  document.getElementById("btn-ai").addEventListener("click", async () => {
+    const a = state.analysis[state.selected];
+    if (!a) return;
+    const btn = document.getElementById("btn-ai");
+    const out = document.getElementById("ai-out");
+    btn.disabled = true; out.textContent = "撰寫中…";
+    const i = a.last, ind = a.ind, p = state.params;
+    const facts = [
+      `標的名稱:${a.name}${a.demo ? "(模擬的示範資料,非真實個股)" : ""}`,
+      `資料日期:${a.bars[i].d}`,
+      `收盤 ${nf(a.close)},較前一日 ${signed(a.chgPct)}%`,
+      `MA${p.maFast} ${nf(ind.maFast[i])} / MA${p.maMid} ${nf(ind.maMid[i])} / MA${p.maSlow} ${nf(ind.maSlow[i])}`,
+      `RSI${p.rsiLen} ${nf(ind.rsi[i], 1)}(超買門檻 ${p.rsiHi}、超賣門檻 ${p.rsiLo})`,
+      `KD:K ${nf(ind.k[i], 1)}、D ${nf(ind.d[i], 1)}`,
+      `MACD:DIF ${nf(ind.dif[i])}、MACD線 ${nf(ind.dea[i])}、柱 ${signed(ind.hist[i])}`,
+      `對 MA${p.maMid} 乖離 ${signed(ind.bias[i], 1)}%`,
+      `成交量為 5 日均量的 ${a.volRatio == null ? "—" : nf(a.volRatio, 2)} 倍`,
+      `近期觸發的訊號:${a.current.length ? a.current.map(e => e.title).join("、") : "無"}`
+    ].join("\n");
+    const prompt = `以下是一檔股票的技術指標計算結果:\n\n${facts}\n\n請用繁體中文寫 3 到 4 句話,說明這些指標目前呈現的技術面狀態(趨勢位置、動能、超買超賣、量能),並點出彼此是否一致或分歧。只描述指標本身的意義,不要預測價格,不要給買賣或進出場建議,不要加標題或條列。`;
+    try {
+      await sample(prompt, { modelTier: "default", onText: ({ text }) => { out.textContent = text; } });
+    } catch (err) {
+      const code = err && err.code;
+      if (code === "not_granted") { card.hidden = true; return; }
+      out.textContent = code === "rate_limited"
+        ? "請求太頻繁,請稍等一下再試。"
+        : (err && err.text) || "這次摘要沒有寫完,請再按一次。";
+    } finally { btn.disabled = false; }
+  });
+}
+
+/* --- 視窗縮放 --- */
+let rzTimer = null;
+window.addEventListener("resize", () => {
+  if (state.view !== "detail") return;
+  clearTimeout(rzTimer);
+  rzTimer = setTimeout(() => { renderChart(); updateCrosshair(); }, 140);
+});
+
+/* =========================================================
+   12. 啟動
+   ========================================================= */
+(async function boot() {
+  await initStorage();
+
+  const cached = storage.mode === "memory" ? null : readLocal();
+  if (cached) {
+    if (cached.params) state.params = { ...DEFAULTS, ...cached.params };
+    if (cached.panels) state.panels = { ...state.panels, ...cached.panels };
+    if (typeof cached.range === "number") state.range = cached.range;
+    if (Array.isArray(cached.datasets)) state.datasets = cached.datasets.filter(d => d && Array.isArray(d.bars) && d.bars.length >= 30);
+  }
+  if (!state.datasets.length) state.datasets = demoSets();
+
+  recomputeAll();
+  render();
+
+  // db 稍後才會回應,回來後再合併一次
+  hydrateFromDb().then(changed => {
+    if (!changed) return;
+    if (!state.datasets.length) state.datasets = demoSets();
+    recomputeAll();
+    render();
+  });
+
+  setupAi();
+})();
+</script>
