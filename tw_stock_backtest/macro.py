@@ -9,10 +9,24 @@ import numpy as np
 import pandas as pd
 
 
-def merge_manual_macro(macro_df: pd.DataFrame, manual_csv_path: str) -> pd.DataFrame:
-    """把程式化抓到的總經面板（如 SOX、匯率），跟人工維護的 CSV（景氣燈號、央行利率等）合併。
+def merge_opendata_macro(macro_df: pd.DataFrame, start: str, end: str) -> pd.DataFrame:
+    """預設路徑：把程式化抓到的市場面總經（SOX、匯率）跟政府開放資料平台自動抓到的
+    景氣對策信號、M1B年增率、出口訂單年增率、央行重貼現率合併，全程不需要任何人工維護的檔案。
+    見 data_sources/opendata_macro_source.py。
+    """
+    from .data_sources.opendata_macro_source import fetch_full_macro_automatically
 
-    manual_csv_path 的格式請參考 data/macro_manual_template.csv。
+    auto = fetch_full_macro_automatically(start, end)
+    merged = macro_df.copy()
+    for col in auto.columns:
+        auto_col = auto[col].reindex(merged.index, method="ffill")
+        merged[col] = merged[col].combine_first(auto_col) if col in merged else auto_col
+    return merged
+
+
+def merge_manual_macro(macro_df: pd.DataFrame, manual_csv_path: str) -> pd.DataFrame:
+    """備援路徑：若 merge_opendata_macro 因為政府開放資料平台改版而失敗，可以用這個手動
+    CSV 合併當備援（格式參考 data/macro_manual_template.csv）。預設流程不會用到這個函式。
     """
     manual = pd.read_csv(manual_csv_path, parse_dates=["date"]).set_index("date")
     merged = macro_df.combine_first(manual.reindex(macro_df.index, method="ffill"))

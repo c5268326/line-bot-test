@@ -5,9 +5,18 @@
 
 ## ⚠️ 目前這個沙盒環境跑不出「真實」回測結果
 
-開發這套程式的執行環境，網路出口政策封鎖了所有金融資料 API（Yahoo Finance、FinMind、
-證交所 OpenAPI 皆回傳 `EGRESS_BLOCKED`），因此**這裡無法抓取真實股價/財報並產生真實的
-投資報酬率數字**。
+開發這套程式的執行環境，網路出口政策封鎖了所有外部資料 API，不只金融資料（Yahoo Finance、
+FinMind、證交所 OpenAPI 皆回傳 `EGRESS_BLOCKED`），連政府開放資料平台（data.gov.tw）與
+央行開放資料 API（cpx.cbc.gov.tw）也一併被封鎖（已實測 `curl` 直接被 proxy 拒絕，回應
+`403`）。這不是「手動 vs 自動」的差異能解決的問題，而是這個沙盒環境的網路出口政策本身
+擋掉了所有非白名單網域（只放行 pypi/npm/github/anthropic 等開發用途網域），所以**無論
+是股價/財報還是總經指標，這裡都無法自動抓到任何真實資料**。
+
+如果你希望在 Claude Code 的環境裡直接讓我抓真實資料，需要的是**換一個網路出口政策較寬鬆
+的執行環境**（建立 Claude Code on the web 的環境時可以選擇網路政策），而不是改程式碼；
+目前這個環境是在建立當下就選定了限制較嚴的政策。詳見
+[Claude Code on the web 文件](https://code.claude.com/docs/en/claude-code-on-the-web)。
+在你自己的電腦或 GitHub Actions 執行則完全沒有這個限制。
 
 已經在本環境完成、且驗證過可正常運作的部分：
 - 完整的多因子選股 + 月頻再平衡 + -20% 停損 + 交易成本的回測引擎（`backtest.py`）。
@@ -37,8 +46,9 @@ tw_stock_backtest/
 │   ├── finmind_source.py          # FinMind API（推薦的真實資料源，需網路）
 │   ├── yfinance_source.py         # yfinance（備援，台股基本面覆蓋率較差）
 │   └── twse_source.py             # 證交所公開資料（備援，僅價格，無基本面）
-├── data/macro_manual_template.csv # 沒有穩定公開 API 的總經指標，手動維護的範本
-└── tests/test_pipeline_synthetic.py
+│   └── opendata_macro_source.py   # 全自動抓景氣對策信號/M1B/出口訂單/央行利率，不需手動維護
+├── data/macro_manual_template.csv # 備援用：自動抓取失敗時才需要的手動範本（預設流程用不到）
+└── tests/
 ```
 
 ## 如何取得真實回測結果
@@ -55,12 +65,13 @@ tw_stock_backtest/
    python -m tw_stock_backtest.run_backtest \
        --source finmind \
        --start 2015-01-01 --end 2024-12-31 \
-       --manual-macro-csv tw_stock_backtest/data/macro_manual_template.csv \
        --output-dir out
    ```
-   `--manual-macro-csv` 請先照著 `data/macro_manual_template.csv` 的格式，把景氣對策信號、
-   央行政策利率、出口訂單年增率、M1B年增率填成真實歷史數字（來源見 RESEARCH.md 第三節的
-   資料源表格），這幾項沒有穩定的免費 API，需要手動維護。
+   景氣對策信號、央行重貼現率、M1B年增率、出口訂單年增率**預設會自動**從政府開放資料平台
+   （data.gov.tw dataset 6099）與央行開放資料 API（cpx.cbc.gov.tw dataset 6022）抓取並合併，
+   不需要準備、也不需要手動更新任何 CSV，見 `data_sources/opendata_macro_source.py`。
+   只有在這條自動路徑因為平台改版而失敗時，程式會印出警告並自動略過該部分（其餘因子照常
+   運作，總經濾網那幾項會變中性值），此時才需要考慮用 `--manual-macro-csv` 提供備援資料。
 6. 看 `out/report.json`（結構化）或終端機印出的 `format_report_text`（人類可讀）。
 
 也可以改用 `--source yfinance`（不需要 token，但基本面資料品質較差，只適合先看價格面
@@ -95,8 +106,10 @@ python -m tw_stock_backtest.run_backtest --source synthetic --output-dir out_syn
 
 - 再平衡目前只處理「因子排名被淘汰 / 新入選」的股票，既有且仍在名單內的持股**不會**被強制
   調整回等權重，這是簡化實作，不是完整的目標權重再平衡。
-- `finmind_source.py` / `twse_source.py` 的欄位映射是依訓練資料當中的既有知識撰寫，**沒有
-  在真實 API 上驗證過**，第一次使用請務必對照官方文件核對。
+- `finmind_source.py` / `twse_source.py` / `opendata_macro_source.py` 的欄位映射是依訓練
+  資料當中的既有知識撰寫，**沒有在真實 API 上驗證過**（沙盒環境連不上這些網域），第一次
+  使用請務必對照官方文件核對；`opendata_macro_source.py` 已經寫成「找關鍵字」而非寫死欄位
+  順序，失敗時會印出清楚的錯誤訊息（列出實際欄位/檔名），方便你快速修正關鍵字。
 - 回測結果的品質高度依賴：(1) 財報「公告可用日」是否正確（避免 look-ahead bias）、
   (2) 存活者偏差（universe 若只放現在還在市場上的股票，會高估歷史績效，應該用「當時的
   完整上市櫃清單」而非事後回推的清單）、(3) 交易成本與流動性篩選是否貼近實務。

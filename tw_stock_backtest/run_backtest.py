@@ -6,6 +6,8 @@
 真實回測（需要有網路權限的環境，並先 pip install -r tw_stock_backtest/requirements.txt）：
     python -m tw_stock_backtest.run_backtest --source finmind --start 2015-01-01 --end 2024-12-31 \
         --output-dir out
+（總經指標 (景氣對策信號/M1B/出口訂單/央行利率) 預設會自動從 data.gov.tw / cpx.cbc.gov.tw
+ 抓取，完全不需要手動維護任何檔案；只有在自動抓取失敗時才需要用 --manual-macro-csv 備援）
 
 長期 / 短期策略預設（見 config.long_term_config / config.short_term_config）：
     python -m tw_stock_backtest.run_backtest --source finmind --preset long_term \
@@ -55,8 +57,10 @@ def main():
     parser.add_argument("--top-n", type=int, default=None)
     parser.add_argument("--stop-loss", type=float, default=None, help="例如 0.20 代表 -20% 停損")
     parser.add_argument("--initial-capital", type=float, default=1_000_000.0)
+    parser.add_argument("--no-auto-macro", action="store_true",
+                         help="關閉自動抓取景氣對策信號/M1B/央行利率（預設會自動抓，不需要手動維護任何檔案）")
     parser.add_argument("--manual-macro-csv", default=None,
-                         help="人工維護的總經 CSV，見 data/macro_manual_template.csv")
+                         help="備援用：自動抓取失敗時，改用人工維護的 CSV，見 data/macro_manual_template.csv")
     parser.add_argument("--output-dir", default="tw_stock_backtest_output")
     args = parser.parse_args()
 
@@ -86,7 +90,21 @@ def main():
     prices = source.get_price_history(all_tickers, config.start_date, config.end_date)
     fundamentals = source.get_fundamentals(config.universe, config.start_date, config.end_date)
     macro_df = source.get_macro(config.start_date, config.end_date)
-    if args.manual_macro_csv:
+    if args.source != "synthetic" and not args.no_auto_macro:
+        from .macro import merge_opendata_macro
+        try:
+            print("      -> 自動抓取景氣對策信號 / M1B / 出口訂單 / 央行重貼現率 "
+                  "(data.gov.tw / cpx.cbc.gov.tw) ...")
+            macro_df = merge_opendata_macro(macro_df, config.start_date, config.end_date)
+        except Exception as e:
+            print(f"      !! 自動抓取總經資料失敗：{e}")
+            if args.manual_macro_csv:
+                print(f"      -> 改用備援 CSV：{args.manual_macro_csv}")
+                from .macro import merge_manual_macro
+                macro_df = merge_manual_macro(macro_df, args.manual_macro_csv)
+            else:
+                print("      -> 沒有提供 --manual-macro-csv 備援，總經濾網會用 sox/匯率以外的欄位皆為中性值繼續跑。")
+    elif args.manual_macro_csv:
         from .macro import merge_manual_macro
         macro_df = merge_manual_macro(macro_df, args.manual_macro_csv)
 
