@@ -52,24 +52,35 @@ BENCHMARK = "0050"
 # 讀資料
 # =====================================================================
 def read_gz(name, numeric):
+    """
+    讀壓縮 CSV。抓取工作被中斷時 gzip 串流可能沒有正常收尾,
+    此時保留已讀到的部分並警告,而不是整份資料丟掉。
+    """
     rows = []
     path = os.path.join(DATA_DIR, name)
-    with gzip.open(path, "rt", encoding="utf-8") as f:
-        for r in csv.DictReader(f):
-            out = dict(r)
-            ok = True
-            for k in numeric:
-                v = out.get(k)
-                if v in (None, "", "None", "nan"):
-                    out[k] = None
-                    continue
-                try:
-                    out[k] = float(v)
-                except ValueError:
-                    ok = False
-                    break
-            if ok:
-                rows.append(out)
+    if not os.path.exists(path):
+        print(f"  ⚠ 找不到 {name},相關策略將被略過", flush=True)
+        return rows
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as f:
+            for r in csv.DictReader(f):
+                out = dict(r)
+                ok = True
+                for k in numeric:
+                    v = out.get(k)
+                    if v in (None, "", "None", "nan"):
+                        out[k] = None
+                        continue
+                    try:
+                        out[k] = float(v)
+                    except ValueError:
+                        ok = False
+                        break
+                if ok:
+                    rows.append(out)
+    except (EOFError, gzip.BadGzipFile) as e:
+        print(f"  ⚠ {name} 檔案不完整({type(e).__name__}),"
+              f"採用已讀到的 {len(rows):,} 筆", flush=True)
     return rows
 
 
@@ -217,6 +228,11 @@ def build_scores(strategy, when, universe, price, val, revenue):
         elif strategy == "revenue_momentum":
             score = revenue_yoy(revenue.get(sid, {}), when)
 
+        elif strategy == "universe_ew":
+            # 對照組:同一個 universe 等權全持。
+            # 它和各策略吃同一份倖存者偏誤,兩者相減才是策略真正的貢獻。
+            score = 0.0
+
         if score is not None and math.isfinite(score):
             out.append((sid, score))
 
@@ -243,7 +259,8 @@ def run(strategy, use_stop, price, val, revenue, all_dates, universe):
     for i, rb in enumerate(rebals):
         end_date = rebals[i + 1] if i + 1 < len(rebals) else all_dates[-1]
         span = all_dates[date_idx[rb]: date_idx[end_date] + 1]
-        picks = [s for s, _ in build_scores(strategy, rb, universe, price, val, revenue)[:TOP_N]]
+        n_hold = len(universe) if strategy == "universe_ew" else TOP_N
+        picks = [s for s, _ in build_scores(strategy, rb, universe, price, val, revenue)[:n_hold]]
 
         if not picks:
             for d in span[1:]:
@@ -385,6 +402,8 @@ def metrics(curve, trades=None, stop_hits=0):
     return m
 
 
+BENCH_LABEL = "對照:universe 等權全持"
+
 STRATEGY_LABEL = {
     "value_pb": "價值:低股價淨值比",
     "quality_value": "品質×價值:高 ROE + 便宜",
@@ -408,14 +427,24 @@ def main():
         "universe_size": len(universe), "rebalance": "quarterly",
     }, "strategies": {}, "benchmark": {}}
 
+    # 對照組:同 universe 等權全持,不含停損。
+    # 各策略與它相減,才是扣掉倖存者偏誤後策略真正的貢獻。
+    bench_final, bench_curve, bench_trades, _ = run(
+        "universe_ew", False, price, val, revenue, all_dates, universe)
+    bm = metrics(bench_curve, bench_trades, 0)
+    results["benchmark"] = {"id": "universe_ew", "label": BENCH_LABEL, **bm}
+    results["benchmark"]["curve"] = [{"d": d, "v": round(v, 4)} for d, v in bench_curve[::5]]
+    print(f"{BENCH_LABEL:24} {'無停損  '}"
+          f"  總報酬 {bm['total_return'] * 100:+8.1f}%"
+          f"  年化 {bm['cagr'] * 100:+6.2f}%"
+          f"  MDD {bm['max_drawdown'] * 100:6.1f}%\n", flush=True)
+
     bh_final, bh_curve = buy_and_hold(BENCHMARK, price, all_dates)
     if bh_final:
-        results["benchmark"] = {
-            "id": BENCHMARK,
-            **metrics([(d, v) for d, v in bh_curve[::5]]),
-            "total_return": round(bh_final - 1, 4),
-        }
+        results["benchmark_etf"] = {"id": BENCHMARK, "total_return": round(bh_final - 1, 4)}
         print(f"對照組 {BENCHMARK} 買進持有:總報酬 {(bh_final - 1) * 100:+.1f}%\n", flush=True)
+    else:
+        print(f"(找不到 {BENCHMARK} 的價格資料,以 universe 等權作為唯一對照)\n", flush=True)
 
     for strat in STRATEGY_LABEL:
         results["strategies"][strat] = {"label": STRATEGY_LABEL[strat]}
@@ -474,6 +503,21 @@ def write_report(res):
                 f"{m.get('sharpe') if m.get('sharpe') is not None else '—'} | "
                 f"{pct(m.get('win_rate')) if m.get('win_rate') is not None else '—'} | "
                 f"{pct(m.get('stop_rate')) if m.get('stop_rate') is not None else '—'} |")
+
+    L.append("\n## 扣掉 universe 偏誤後的超額報酬\n")
+    bench_cagr = (res.get("benchmark") or {}).get("cagr")
+    if bench_cagr is not None:
+        L.append(f"對照組(同 universe 等權全持)年化 **{pct(bench_cagr, 2)}**。"
+                 "策略與它的差額,才是選股邏輯真正的貢獻;"
+                 "兩者吃同一份倖存者偏誤,相減可大致抵銷。\n")
+        L.append("| 策略 | 年化(無停損) | 對照組 | 超額 |")
+        L.append("|---|---:|---:|---:|")
+        for _, s2 in res["strategies"].items():
+            m = s2.get("no_stop") or {}
+            if m.get("cagr") is None:
+                continue
+            L.append(f"| {s2['label']} | {pct(m['cagr'], 2)} | {pct(bench_cagr, 2)} | "
+                     f"{(m['cagr'] - bench_cagr) * 100:+.2f}pp |")
 
     L.append("\n## 停損的影響\n")
     L.append("| 策略 | 無停損年化 | 含停損年化 | 差異 | 回撤改善 |")
