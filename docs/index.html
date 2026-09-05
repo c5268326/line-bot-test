@@ -572,16 +572,35 @@ table.bt tr.is-bench td:first-child { font-weight: 700; }
   <section id="view-research" hidden>
     <p class="bt-intro">
       十個台股常見的選股策略,五個量化(可程式化、可回測)、五個質化(需要判斷,無法純程式化)。
-      量化的五個以真實台股日線做了回測,並與「同一批股票等權全部持有」對照 ——
-      那條對照線才是判斷選股邏輯有沒有貢獻的基準。
+      量化的以真實台股日線回測,股票池採 <b>point-in-time</b> —— 每個換股日各自取當天成交金額前 150 名,
+      只看那個當下真正買得到的股票,已下市的公司也留在樣本裡。
+      並與「同一批股票等權全部持有」對照,那條對照線才是判斷選股邏輯有沒有貢獻的基準。
     </p>
 
+    <div class="panel" id="bias-panel" style="margin-bottom:16px">
+      <div class="panel-head">
+        <h3 class="panel-title">修正倖存者偏誤前後</h3>
+        <span class="panel-note">同一套訊號與成本,只換股票池</span>
+      </div>
+      <div class="tablewrap" style="border:none"><table class="bt"><thead><tr>
+        <th>策略</th><th>舊:今天的名單回頭套</th><th>新:point-in-time</th><th>差異</th>
+      </tr></thead><tbody id="bias-body"></tbody></table></div>
+      <p class="hint" style="padding:12px 16px 0">
+        用「今天」的熱門股名單回頭套十年,等於預先知道誰會活下來、誰會長大。
+        實測 2015-01-05 全市場 873 檔、2026-09-04 為 1093 檔,其中 291 檔是這段期間才上市的,
+        另有 71 檔已下市 —— 新上市那半是下市那半的四倍,才是偏誤的主因。
+        修正後對照組年化從 +25.38% 降到 +10.40%,落回台股同期實際的 10~13% 區間。
+        <b>那 15 個百分點全部是偏誤,不是報酬。</b>
+      </p>
+    </div>
+
     <div class="warnbox">
-      <h4>這些數字不能拿來當投資依據</h4>
+      <h4>這些數字仍不能拿來當投資依據</h4>
       <ul>
-        <li><b>倖存者偏誤:</b>股票池是用「今天」的成交金額前 120 名回頭選的,等於預先知道誰活下來且變大。對照組年化 25% 就是鐵證 —— 台股同期實際約 10~13%。<b>只有「超額」欄位有參考價值,絕對報酬沒有。</b></li>
+        <li><b>股票池偏大型股:</b>point-in-time 修掉了「回頭套名單」,但仍以成交金額排序,不是全市場,小型股效應看不到。</li>
         <li><b>未計入股利:</b>報酬僅為價格報酬,高股息策略被系統性低估。</li>
         <li><b>未計入滑價:</b>手續費與證交稅已計入,但每季換 20 檔的衝擊成本沒算。</li>
+        <li><b>月營收動能本輪未回測:</b>營收資料只涵蓋舊的 120 檔,套在 711 檔的池子上會變成另一種偏誤,寧可不報。</li>
         <li>回測是對歷史的描述,不是對未來的預測,更不是投資建議。</li>
       </ul>
     </div>
@@ -1980,7 +1999,8 @@ function renderBtConfig() {
   const c = bt.data.config;
   document.getElementById("bt-cfg").innerHTML = [
     ["回測期間", `${c.start.slice(0, 7)} ~ ${c.end.slice(0, 7)}`],
-    ["股票池", `${c.universe_size} 檔`],
+    ["股票池", c.universe_mode === "point-in-time"
+      ? `每期前 ${c.universe_size} 檔・${c.universe_periods} 期` : `${c.universe_size} 檔`],
     ["每期持股", `${c.top_n} 檔等權`],
     ["換股頻率", "每季"],
     ["停損", `${Math.round(c.stop_loss * 100)}%`],
@@ -2092,6 +2112,25 @@ function renderBtTable() {
 const pctTxt = (v, d) => v == null || !Number.isFinite(v)
   ? "—" : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v * 100).toFixed(d) + "%";
 
+function renderBiasTable() {
+  const host = document.getElementById("bias-panel");
+  const prior = bt.data.prior;
+  if (!prior) { host.hidden = true; return; }
+  host.hidden = false;
+  const row = (label, o, n, bold) => {
+    const d = n - o;
+    return `<tr${bold ? ' class="is-bench"' : ""}><td>${bold ? "<b>" + esc(label) + "</b>" : esc(label)}</td>
+      <td>${pctTxt(o, 2)}</td><td>${pctTxt(n, 2)}</td>
+      <td class="${d >= 0 ? "up" : "down"}">${(d * 100 >= 0 ? "+" : "−") + Math.abs(d * 100).toFixed(2)}pp</td></tr>`;
+  };
+  const rows = [row(bt.data.benchmark.label, prior.benchmark.cagr, bt.data.benchmark.cagr, true)];
+  Object.entries(bt.data.strategies).forEach(([k, sst]) => {
+    const o = prior.strategies[k];
+    if (o) rows.push(row(sst.label, o.cagr, sst.no_stop.cagr, false));
+  });
+  document.getElementById("bias-body").innerHTML = rows.join("");
+}
+
 function renderStrategyCards() {
   const bc = bt.data ? bt.data.benchmark.cagr : null;
   document.getElementById("strat-quant").innerHTML = QUANT_STRATEGIES.map(([k, name, desc]) => {
@@ -2100,6 +2139,8 @@ function renderStrategyCards() {
       const m = bt.data.strategies[k].no_stop, ex = m.cagr - bc;
       res = `<div class="strat-r">回測年化 <b>${pctTxt(m.cagr, 2)}</b> ・
              對照組超額 <b class="${ex >= 0 ? "up" : "down"}">${(ex * 100 >= 0 ? "+" : "−") + Math.abs(ex * 100).toFixed(2)}pp</b></div>`;
+    } else if (bt.data) {
+      res = `<div class="strat-r">本輪未回測 —— 月營收資料只涵蓋舊的 120 檔,套在 point-in-time 的 711 檔池子上會變成另一種偏誤。</div>`;
     }
     return `<div class="strat"><div class="strat-h"><span class="strat-n">${esc(name)}</span>
             <span class="strat-tag tag-q">量化</span></div>
@@ -2121,7 +2162,7 @@ async function renderResearch() {
     renderStrategyCards();
     return;
   }
-  renderBtConfig(); renderBtChart(); renderBtLegend(); renderBtTable(); renderStrategyCards();
+  renderBtConfig(); renderBiasTable(); renderBtChart(); renderBtLegend(); renderBtTable(); renderStrategyCards();
 }
 
 document.getElementById("bt-stop-off").addEventListener("click", () => {
