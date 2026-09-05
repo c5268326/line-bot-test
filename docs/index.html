@@ -1175,13 +1175,10 @@ const unpackBars = rows => rows.map(r => Array.isArray(r)
   ? { d: r[0], o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] }
   : { d: r.d, o: +r.o, h: +r.h, l: +r.l, c: +r.c, v: +r.v });
 
-async function initStorage() {
+function initStorage() {
+  // 刻意只用 localStorage:artifact 一旦宣告 db 能力就變成組織內部限定,
+  // 無法用連結分享出去,而這個頁面的定位就是「拿到連結的人都能開」。
   try { localStorage.getItem(LS_KEY); storage.mode = "local"; } catch (e) { storage.mode = "memory"; }
-  if (typeof window.claude?.use !== "function") return;
-  try {
-    const db = await window.claude.use("db");
-    if (db) { storage.db = db; storage.mode = "db"; }
-  } catch (e) { /* 沒有 db 就用本機 */ }
 }
 
 function saveLocal() {
@@ -1209,57 +1206,11 @@ function readLocal() {
   } catch (e) { return null; }
 }
 
-async function persist() {
-  saveLocal();
-  if (!storage.db) return;
-  try { await storage.db.doc("station/settings").set({ params: state.params, panels: state.panels, range: state.range }); }
-  catch (e) { /* 唯讀 */ }
-}
+function persist() { saveLocal(); }
 
-async function persistDataset(ds) {
-  saveLocal();
-  if (!storage.db) return true;
-  try {
-    await storage.db.doc("datasets/" + ds.id).set({ name: ds.name, note: ds.note || "", rows: packBars(ds.bars), addedAt: Date.now() });
-    return true;
-  } catch (e) { return false; }
-}
+function persistDataset(ds) { saveLocal(); return true; }
 
-async function removePersisted(id) {
-  saveLocal();
-  if (!storage.db) return;
-  try { await storage.db.doc("datasets/" + id).delete(); } catch (e) { /* 唯讀 */ }
-}
-
-async function hydrateFromDb() {
-  if (!storage.db) return false;
-  let changed = false;
-  try {
-    const snap = await storage.db.doc("station/settings").get();
-    if (snap.exists) {
-      const s = snap.data() || {};
-      if (s.params) { state.params = { ...DEFAULTS, ...s.params }; changed = true; }
-      if (s.panels) { state.panels = { ...state.panels, ...s.panels }; changed = true; }
-      if (typeof s.range === "number") { state.range = s.range; changed = true; }
-    }
-  } catch (e) { /* 無設定 */ }
-  try {
-    const qs = await storage.db.collection("datasets").get();
-    const loaded = [];
-    for (const doc of qs.docs) {
-      const data = doc.data();
-      if (!data || !Array.isArray(data.rows) || data.rows.length < 30) continue;
-      loaded.push({ id: doc.id, name: String(data.name || doc.id), src: "manual", note: data.note || "", bars: unpackBars(data.rows) });
-    }
-    if (loaded.length) {
-      state.datasets = [...loaded, ...state.datasets.filter(d => d.src !== "manual")];
-      changed = true;
-    } else {
-      for (const ds of state.datasets.filter(d => d.src === "manual")) await persistDataset(ds);
-    }
-  } catch (e) { /* 無資料 */ }
-  return changed;
-}
+function removePersisted(id) { saveLocal(); }
 
 /* =========================================================
    8. 格式化
@@ -1779,7 +1730,7 @@ document.getElementById("scan-body").addEventListener("click", async ev => {
     if (!ds || !confirm(`確定要移除「${ds.name}」嗎?`)) return;
     state.datasets = state.datasets.filter(d => d.id !== id);
     if (state.selected === id) state.selected = null;
-    await removePersisted(id);
+    removePersisted(id);
     recomputeAll(); render();
     return;
   }
@@ -1864,7 +1815,7 @@ document.getElementById("btn-add").addEventListener("click", async () => {
   state.selected = ds.id;
   state.hoverIdx = null; state.activeEvent = null;
   recomputeAll();
-  const ok = await persistDataset(ds);
+  const ok = persistDataset(ds);
   document.getElementById("in-name").value = "";
   document.getElementById("in-data").value = "";
   state.view = "detail";
@@ -1897,7 +1848,7 @@ dlgSettings.addEventListener("close", async () => {
   if (next.maMid >= next.maSlow) next.maSlow = next.maMid + 10;
   if (next.rsiLo >= next.rsiHi) { next.rsiLo = DEFAULTS.rsiLo; next.rsiHi = DEFAULTS.rsiHi; }
   state.params = next;
-  await persist();
+  persist();
   recomputeAll(); render();
 });
 
@@ -2191,7 +2142,7 @@ document.getElementById("bt-legend").addEventListener("click", ev => {
    15. 啟動
    ========================================================= */
 (async function boot() {
-  await initStorage();
+  initStorage();
 
   const cached = storage.mode === "memory" ? null : readLocal();
   if (cached) {
@@ -2210,13 +2161,6 @@ document.getElementById("bt-legend").addEventListener("click", ev => {
 
   recomputeAll();
   render();
-
-  hydrateFromDb().then(changed => {
-    if (!changed) return;
-    if (!state.datasets.length) state.datasets = demoSets();
-    recomputeAll();
-    render();
-  });
 
   setupAi();
 })();
