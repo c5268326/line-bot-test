@@ -181,6 +181,45 @@ session B 加了一條對照線:**同一個股票池、等權重、同樣每季�
 711 檔的 `TaiwanStockMonthRevenue`,再把 `backtest_pit.py` 裡排除
 `revenue_momentum` 的那行拿掉即可。
 
+## 五之二、tw_stock_backtest/ 資料源假設的實測核對
+
+`research/probe_schema_for_session_a.py`,2026-09-05 於 GitHub Actions 實跑。
+針對 PR #1 自述的「欄位映射依訓練資料撰寫,未在真實 API 上實測」逐條驗證。
+
+**14 項通過、1 項需要修正。** 那份程式的資料源比預期準確,只有一個地方要改。
+
+### 通過的部分(不用動)
+
+| 假設 | 實測 |
+|---|---|
+| STOCK_DAY 舊端點 `/exchangeReport/` 仍可用 | HTTP 200 |
+| 其欄位順序符合 `twse_source.py` 的位置索引 | 日期/成交股數/成交金額/開盤價/最高價/最低價/收盤價,完全一致 |
+| 六個 FinMind dataset 名稱 | 全部存在,含 `TaiwanStockBalanceSheet` |
+| 損益表科目 `Revenue` / `GrossProfit` / `IncomeAfterTaxes` / `EPS` | 全部命中(該表共 17 個科目) |
+| 資產負債表科目 `Equity` / `Liabilities` | 全部命中(該表共 103 個科目) |
+| `TaiwanExchangeRate` 的 `cash_sell` / `spot_sell` | 兩個都在 |
+
+我原本最擔心 `pick()` 找不到科目會讓 ROE 整欄變 NaN 而不報錯 —— 那個風險沒有成立。
+
+### 需要修正的一項:月營收的 date 不是公告日
+
+實測 2330:
+
+```
+date=2023-01-01  revenue_year=2022  revenue_month=12
+date=2023-02-01  revenue_year=2023  revenue_month=1
+```
+
+FinMind 的 `date` 是**營收月份的次月 1 日**。台股規定次月 10 日前公布,
+所以 `_get_revenue_yoy` 直接把 `date` 當公告日,會比真正可得的時間早最多 9 天。
+
+諷刺的是,那段程式自己寫的 fallback(次月 +10 天)才是對的,
+但因為 `date` 欄一直存在,`announce_date.isna().all()` 永遠是 False,fallback 從來不會執行。
+
+修法:把 `announce_date` 直接算成 `營收月份 + 1 個月 + 10 天`,不要用 `date` 欄。
+
+> 我先前在對話中把這個偏誤說成「10~40 天」,那是高估;實測是最多 9 天。
+
 ## 六、兩邊的分工建議
 
 `tw_stock_backtest/` 的架構比 `research/` 好:設定集中在 `config.py`、因子可加權、

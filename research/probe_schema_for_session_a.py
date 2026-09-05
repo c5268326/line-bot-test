@@ -130,12 +130,26 @@ if data:
     for r in data[:5]:
         print(f"      date={r.get('date')}  revenue_year={r.get('revenue_year')}"
               f"  revenue_month={r.get('revenue_month')}", flush=True)
-    bad = [r for r in data
-           if str(r.get("revenue_year")) == str(r.get("date", ""))[:4]
-           and int(r.get("revenue_month") or 0) == int(str(r.get("date", "0000-00"))[5:7] or 0)]
-    check("date 欄就是營收所屬月份(不是公告日)", bool(bad),
-          f"{len(bad)}/{len(data)} 筆的 date 與 revenue_year/month 同月 —— "
-          "若成立,finmind_source._get_revenue_yoy 把它當公告日會產生約 10~40 天的前視偏誤")
+
+    def next_month(y, m):
+        return (y + 1, 1) if m == 12 else (y, m + 1)
+
+    shifted = 0
+    for r in data:
+        try:
+            y, m = int(r["revenue_year"]), int(r["revenue_month"])
+            dy, dm = int(str(r["date"])[:4]), int(str(r["date"])[5:7])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if (dy, dm) == next_month(y, m):
+            shifted += 1
+    # 台股規定次月 10 日前公布。FinMind 的 date 是「次月 1 日」,
+    # 比真正可用的日子早了最多 9 天 —— 拿它當公告日就是這麼多天的前視偏誤。
+    check("date 欄 = 營收月份的次月 1 日(既不是營收月,也不是公告日)",
+          shifted == len(data),
+          f"{shifted}/{len(data)} 筆符合。finmind_source._get_revenue_yoy 直接把 date "
+          "當公告日,會早於法定的次月 10 日,最多 9 天前視;"
+          "它自己的 fallback(次月 +10 天)反而是對的")
 else:
     print(f"  ⚠ 取不到月營收({err})", flush=True)
     WARN.append("MonthRevenue")
