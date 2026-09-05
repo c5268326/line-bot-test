@@ -761,6 +761,106 @@ def stock_station_asset(filename):
     return send_from_directory(DOCS_DIR, filename)
 
 
+# --- 即時行情 API ---------------------------------------------------
+# 網頁在瀏覽器裡不能直接抓證交所(對方沒有給跨網域標頭,會被 CORS 擋),
+# 但由伺服器代抓就沒有這個限制。
+#
+# 歷史日線來自 docs/data/stocks.json(由排程更新),這支 API 只負責補上
+# 「今天」那一根:證交所有一個端點可以一次拿到全市場當日收盤,所以不論
+# 監測幾檔股票,對外都只有一次請求。
+_QUOTE_CACHE = {"at": 0, "payload": None}
+_QUOTE_TTL = 600          # 快取 10 分鐘,避免每次重新整理都打證交所
+TWSE_ALL = "https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY_ALL?response=json"
+
+
+def _fetch_twse_today():
+    """回傳 {股票代號: [日期, 開, 高, 低, 收, 量(張)]},失敗回傳 {}"""
+    import csv as _csv
+    import io as _io
+    import urllib.request as _req
+
+    r = _req.Request(TWSE_ALL, headers={
+        "User-Agent": "Mozilla/5.0 (compatible; tw-signal-station/1.0)",
+        "Accept": "text/csv, application/json, */*",
+    })
+    with _req.urlopen(r, timeout=20) as resp:
+        rows = list(_csv.DictReader(_io.StringIO(resp.read().decode("utf-8-sig"))))
+
+    def num(s):
+        try:
+            return float(str(s).replace(",", "").strip('"'))
+        except (TypeError, ValueError):
+            return None
+
+    out = {}
+    for row in rows:
+        code = (row.get("證券代號") or "").strip().strip('"')
+        if not (len(code) == 4 and code.isdigit()):
+            continue
+        raw_date = (row.get("日期") or "").strip().strip('"')
+        if len(raw_date) != 7 or not raw_date.isdigit():
+            continue
+        # 民國年轉西元
+        iso = f"{int(raw_date[:3]) + 1911}-{raw_date[3:5]}-{raw_date[5:7]}"
+
+        c = num(row.get("收盤價"))
+        if not c or c <= 0:
+            continue
+        o = num(row.get("開盤價")) or c
+        h = num(row.get("最高價")) or c
+        l = num(row.get("最低價")) or c
+        shares = num(row.get("成交股數")) or 0
+        out[code] = [iso, o, h, l, c, int(shares // 1000)]
+    return out
+
+
+@app.route("/stock/api/stocks", methods=["GET"])
+def stock_station_api():
+    """歷史日線 + 今日最新收盤,合併後回傳給網頁"""
+    import time as _time
+
+    now = _time.time()
+    if _QUOTE_CACHE["payload"] and now - _QUOTE_CACHE["at"] < _QUOTE_TTL:
+        return app.response_class(_QUOTE_CACHE["payload"], mimetype="application/json")
+
+    base_path = os.path.join(DOCS_DIR, "data", "stocks.json")
+    if not os.path.exists(base_path):
+        return {"error": "尚無歷史資料"}, 404
+    with open(base_path, encoding="utf-8") as f:
+        payload = json.load(f)
+
+    live_note = "歷史資料"
+    try:
+        today = _fetch_twse_today()
+    except Exception as e:                       # noqa: BLE001 - 抓不到就用歷史資料
+        today = {}
+        print(f"[stock api] 取得證交所當日資料失敗:{e}")
+
+    if today:
+        appended = 0
+        for s in payload.get("stocks", []):
+            bar = today.get(s["id"])
+            if not bar:
+                continue
+            bars = s["bars"]
+            if bars and bars[-1][0] == bar[0]:
+                bars[-1] = bar                   # 同一天就覆蓋(盤中會變動)
+            elif not bars or bar[0] > bars[-1][0]:
+                bars.append(bar)
+                appended += 1
+        if appended or today:
+            payload["as_of"] = max(s["bars"][-1][0] for s in payload["stocks"] if s["bars"])
+            live_note = "含當日證交所資料"
+
+    TW = timezone(timedelta(hours=8))
+    payload["updated_at"] = datetime.now(TW).isoformat(timespec="seconds")
+    payload["source"] = f"證交所日線({live_note})"
+
+    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    _QUOTE_CACHE["at"], _QUOTE_CACHE["payload"] = now, body
+    return app.response_class(body, mimetype="application/json")
+
+
 @app.route("/update", methods=["GET"])
 def update():
     """手動觸發抓取最新 Excel 更新業績資料"""

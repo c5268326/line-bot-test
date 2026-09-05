@@ -1007,14 +1007,23 @@ function readInlineFeed() {
   }
 }
 
+async function tryFetch(url) {
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;   // CSP 封鎖、離線、檔案不存在都走這裡
+  }
+}
+
 async function loadFeed() {
   try {
+    // 有內嵌資料代表這是 Artifact 版本 —— 那裡不能連外,直接用內嵌的。
+    // 其他部署則優先取後端即時 API,沒有再退回靜態檔。
     let j = readInlineFeed();
-    if (!j) {
-      const res = await fetch("data/stocks.json", { cache: "no-store" });
-      if (!res.ok) return null;
-      j = await res.json();
-    }
+    if (!j) j = await tryFetch("api/stocks");
+    if (!j) j = await tryFetch("data/stocks.json");
     if (!j || !Array.isArray(j.stocks) || !j.stocks.length) return null;
     const sets = [];
     for (const s of j.stocks) {
