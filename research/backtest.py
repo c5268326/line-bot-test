@@ -196,8 +196,49 @@ def revenue_yoy(rev, when):
     return sum(ratios) / len(ratios)
 
 
+def rank_composite(items):
+    """
+    雙因子排名合成。items = [(sid, 值A, 值B)],兩者皆為越大越好。
+    分別轉成百分位排名再相加,避免量綱差異讓其中一個因子主導。
+    """
+    n = len(items)
+    if n < 2:
+        return [(sid, 0.0) for sid, _, _ in items]
+    ranks = {}
+    for idx in (1, 2):
+        order = sorted(range(n), key=lambda i: items[i][idx])
+        for pos, i in enumerate(order):
+            sid = items[i][0]
+            ranks[sid] = ranks.get(sid, 0.0) + pos / (n - 1)
+    return [(sid, ranks[sid]) for sid, _, _ in items]
+
+
 def build_scores(strategy, when, universe, price, val, revenue):
     """回傳 [(stock_id, 分數)],分數越高越優先"""
+
+    if strategy == "quality_value":
+        # 品質與價值各自獨立排名後相加。
+        # 先前寫成 roe/PBR,代入 roe=PBR/PER 後恰好等於 1/PER,
+        # 等於退化成純低本益比,品質完全沒有參與排序 —— 那是實作錯誤。
+        cand = []
+        for sid in universe:
+            pser = price.get(sid)
+            if not pser or when not in pser:
+                continue
+            v = latest_on_or_before(val.get(sid, {}), when)
+            if not v:
+                continue
+            per, pbr = v.get("PER"), v.get("PBR")
+            if not per or not pbr or per <= 0 or pbr <= 0:
+                continue
+            roe = pbr / per
+            if roe <= 0.08:                      # 品質門檻:年化 ROE 需高於 8%
+                continue
+            cand.append((sid, roe, -pbr))        # 高 ROE 好、低 PBR 好
+        scored = rank_composite(cand)
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored
+
     out = []
     for sid in universe:
         pser = price.get(sid)
@@ -209,13 +250,6 @@ def build_scores(strategy, when, universe, price, val, revenue):
         if strategy == "value_pb":
             if v and v.get("PBR") and v["PBR"] > 0:
                 score = -v["PBR"]                       # 低股價淨值比優先
-
-        elif strategy == "quality_value":
-            # ROE = PBR / PER;要求正獲利,再以 ROE 與便宜程度綜合排序
-            if v and v.get("PER") and v.get("PBR") and v["PER"] > 0 and v["PBR"] > 0:
-                roe = v["PBR"] / v["PER"]
-                if roe > 0.08:                          # 年化 ROE 門檻 8%
-                    score = roe / v["PBR"]              # 每單位淨值價格買到的獲利能力
 
         elif strategy == "dividend":
             if v and v.get("dividend_yield") and v["dividend_yield"] > 0:
@@ -406,7 +440,7 @@ BENCH_LABEL = "對照:universe 等權全持"
 
 STRATEGY_LABEL = {
     "value_pb": "價值:低股價淨值比",
-    "quality_value": "品質×價值:高 ROE + 便宜",
+    "quality_value": "品質×價值:ROE 與 PBR 雙因子排名",
     "dividend": "高現金殖利率",
     "momentum": "動能:12-1 相對強弱",
     "revenue_momentum": "月營收年增動能",
