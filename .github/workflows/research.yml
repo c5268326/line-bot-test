@@ -7,6 +7,14 @@ on:
         description: "要執行的研究程式(research/ 底下的檔名)"
         required: true
         default: "probe_sources.py"
+      only_datasets:
+        description: "只抓指定的 FinMind dataset(逗號分隔,留空為全部)"
+        required: false
+        default: ""
+      universe_size:
+        description: "universe 檔數"
+        required: false
+        default: "120"
 
 permissions:
   contents: write
@@ -29,6 +37,10 @@ jobs:
         run: pip install requests pandas numpy
 
       - name: 執行研究程式
+        env:
+          ONLY_DATASETS: ${{ inputs.only_datasets }}
+          UNIVERSE_SIZE: ${{ inputs.universe_size }}
+          FINMIND_PACE: "2.0"
         run: python "research/${{ inputs.script }}"
 
       - name: 提交產出結果

@@ -151,13 +151,33 @@ DATASETS = [
 
 def main():
     os.makedirs(DATA_DIR, exist_ok=True)
-    universe = build_universe(UNIVERSE_SIZE)
-    ids = [c for c, _ in universe]
+
+    # 只跑指定的資料集(逗號分隔),讓抓取可以分段進行。
+    # 一次跑完三個資料集需要 360 次請求,很容易撞上 FinMind 的匿名額度;
+    # 分段跑則每段結束就 commit,中斷不會讓先前的進度歸零。
+    only = {s.strip() for s in os.environ.get("ONLY_DATASETS", "").split(",") if s.strip()}
+
+    universe_path = os.path.join(DATA_DIR, "universe.csv")
+    if os.path.exists(universe_path) and only:
+        # 分段跑時沿用既有 universe,否則每段選到的股票會不一致
+        with open(universe_path, encoding="utf-8") as f:
+            ids = [r["stock_id"] for r in csv.DictReader(f)]
+        print(f"沿用既有 universe:{len(ids)} 檔", flush=True)
+    else:
+        ids = [c for c, _ in build_universe(UNIVERSE_SIZE)]
 
     print(f"\n抓取區間 {START_DATE} ~ {END_DATE},共 {len(ids)} 檔", flush=True)
 
     for filename, dataset, fields in DATASETS:
+        if only and dataset not in only:
+            print(f"\n=== 略過 {dataset}(不在 ONLY_DATASETS 內)===", flush=True)
+            continue
+
         path = os.path.join(DATA_DIR, filename)
+        if os.path.exists(path) and os.path.getsize(path) > 50_000 and not only:
+            print(f"\n=== {filename} 已存在且有內容,略過 ===", flush=True)
+            continue
+
         print(f"\n=== {dataset} → {filename} ===", flush=True)
         total, missing = 0, []
 
