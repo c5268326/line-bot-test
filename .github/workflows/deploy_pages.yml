@@ -1,10 +1,18 @@
 name: 部署檢測站到 GitHub Pages
 
-# ⚠ 這個 workflow 目前只能手動觸發。
+# ⚠⚠ 啟用前先讀這段:這個 repo 是公開的(visibility: public)。
 #
+# 一旦啟用 Pages,https://c5268326.github.io/line-bot-test/ 會是**完全公開**的網址,
+# 任何人都能開,Google 也會收錄。這和「只有拿到連結的人才能看」是相反的。
+# 如果要的是不可被搜尋到的分享連結,請用 artifact,不要用 Pages;
+# 真的要用 Pages,建議先把 repo 改成 private(Pages 才會變成需要授權才能看)。
+#
+# ⚠ 另外,這個 workflow 只能手動觸發。
 # 原因:Actions 的預設 GITHUB_TOKEN 沒有「建立 Pages 站台」的權限,
 # 第一次執行時 actions/configure-pages 會回報
 # 「Create Pages site failed: Resource not accessible by integration」。
+# 已確認這不是權限宣告寫漏(pages: write / id-token: write 都在),
+# 而是 GITHUB_TOKEN 本身就不能建站,只能在站台存在後部署。
 #
 # 要啟用,請先到 repo 的 Settings → Pages,把 Source 設成 GitHub Actions,
 # 然後把下面 push: 那四行的註解取消,之後 docs/ 一有變動就會自動重新部署
