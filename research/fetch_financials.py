@@ -202,6 +202,26 @@ def sanity(rat, years):
     return w
 
 
+def load_existing():
+    """讀既有產出以支援續抓。360 個請求撞上 FinMind 配額時會拖很久,
+    中途被砍不該讓整批重來 —— fetch_pit.py 已經踩過同一個坑。"""
+    if not os.path.exists(DEST):
+        return {}
+    try:
+        return (json.load(open(DEST, encoding="utf-8")) or {}).get("stocks") or {}
+    except (ValueError, OSError):
+        return {}
+
+
+def save(out):
+    """寫暫存再 replace,避免中途失敗把既有產出毀掉"""
+    os.makedirs(os.path.dirname(DEST), exist_ok=True)
+    tmp = DEST + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
+    os.replace(tmp, DEST)
+
+
 def main():
     stocks = json.load(open(STOCKS, encoding="utf-8"))["stocks"]
     ids = [(s["id"], s["name"]) for s in stocks]
@@ -218,13 +238,19 @@ def main():
     if not basis:
         raise SystemExit("✗ 無法判別財報基準,停止 —— 猜錯會讓所有比率靜默偏掉")
 
+    done = load_existing()
+    if done:
+        print(f"續抓:已有 {len(done)} 檔,尚缺 {len(ids) - len(done)} 檔\n", flush=True)
+
     out = {"updated_at": time.strftime("%Y-%m-%dT%H:%M:%S+00:00"),
            "source": "FinMind", "basis": basis, "basis_note": why,
            "note": "Goodinfo 對資料中心 IP 回 403,故改用 FinMind;科目已逐一實測",
-           "stocks": {}}
+           "stocks": dict(done)}
 
-    ok = 0
+    ok = len(done)
     for n, (sid, name) in enumerate(ids, 1):
+        if sid in done:
+            continue
         is_r = by_date(fm("TaiwanStockFinancialStatements", sid, start, end), IS_FIELDS)
         bs_r = by_date(fm("TaiwanStockBalanceSheet", sid, start, end), BS_FIELDS)
         cf_r = by_date(fm("TaiwanStockCashFlowsStatement", sid, start, end), CF_FIELDS)
@@ -248,10 +274,10 @@ def main():
         }
         ok += 1
         if n % 10 == 0 or n == len(ids):
+            save(out)                      # 每 10 檔落地一次,被砍也只損失最後幾檔
             print(f"  [{n:3}/{len(ids)}] 已完成 {ok} 檔", flush=True)
 
-    os.makedirs(os.path.dirname(DEST), exist_ok=True)
-    json.dump(out, open(DEST, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
+    save(out)
     warned = sum(1 for v in out["stocks"].values() if v["verification"]["sanity"])
     print(f"\n完成:{ok} 檔,{os.path.getsize(DEST)/1024:.0f} KB,"
           f"其中 {warned} 檔有合理性警示", flush=True)
