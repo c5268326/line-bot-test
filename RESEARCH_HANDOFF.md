@@ -220,6 +220,71 @@ FinMind 的 `date` 是**營收月份的次月 1 日**。台股規定次月 10 �
 
 > 我先前在對話中把這個偏誤說成「10~40 天」,那是高估;實測是最多 9 天。
 
+## 五之三、三張財報:Goodinfo 抓不到,改用 FinMind
+
+使用者給了 `chengwesley/taiwan-stock-analysis`(一支從 Goodinfo 抓三表、
+產生三分頁儀表板的 Claude Skill),要求納入本專案。
+
+### Goodinfo 在 Actions 上完全不通,但那支 skill 沒有壞
+
+實測(`research/probe_goodinfo.py`、`probe_goodinfo2.py`):
+
+| 請求 | 結果 |
+|---|---|
+| `StockFinDetail.asp` 三張報表(帶 CLIENT_KEY cookie) | HTTP 403 |
+| `goodinfo.tw/tw/index.asp` 首頁(不帶任何 cookie) | HTTP 403 |
+
+**連首頁都 403,代表整個資料中心 IP 被擋,不是 CLIENT_KEY 手法失效。**
+那支 skill 在住宅 IP(使用者自己的電腦)應該仍可用,只是進不了這個
+repo 的 Actions 管線。不要把它寫成「壞了」。
+
+### FinMind 三張報表可用且科目齊全(已實測)
+
+| dataset | 科目數 | 驗過的關鍵科目 |
+|---|---:|---|
+| `TaiwanStockFinancialStatements` | 16 | Revenue, GrossProfit, OperatingExpenses, OperatingIncome, IncomeAfterTaxes, EPS |
+| `TaiwanStockBalanceSheet` | 105 | CashAndCashEquivalents, Inventories, CurrentAssets, CurrentLiabilities, Liabilities, Equity, TotalAssets |
+| `TaiwanStockCashFlowsStatement` | 29 | NetCashInflowFromOperatingActivities, CashProvidedByInvestingActivities, PropertyAndPlantAndEquipment(capex 代理), Depreciation, CashBalancesEndOfPeriod |
+
+抓取程式 `research/fetch_financials.py`,產出 `docs/data/financials.json`。
+
+### 三個坑(前兩個是這次踩的)
+
+**1. 財報是單季還是累計,決定所有比率的分母。**
+猜錯不會報錯,只會讓毛利率整片偏掉。判別法不必寫死任何數字:
+月營收 12 個月加總 = 年營收,拿它比對四季加總即可。
+實測台股是**單季值**,年度數字要自行加總。判別不出來就直接停止,不要硬跑。
+
+驗證通過的證據:台積電 2024 毛利率 56.12%、EPS 45.26,與實際年報一致;
+鴻海 6.25% 的低毛利、台塑連兩年虧損也都符合現實。
+
+**2. 「期末現金」列在現金流量表裡,但它是存量不是流量。**
+把整張現金流量表都當流量四季相加,期末現金會變成約 3.5 倍
+(台積電 2024:75,117 億 vs 資產負債表的 21,276 億)。
+`CashBalancesEndOfPeriod` 與 `CashBalancesBeginningOfPeriod` 要當存量取年末。
+
+這個錯是被交叉核對抓到的 —— 那個檢查是照 `taiwan-stock-analysis` 的
+SKILL.md 規格補的(它自己規定卻沒實作),結果抓到的第一個錯是我們自己的。
+
+**3. 不完整的年度要整年丟棄,不能只丟流量欄位。**
+當年度只有一兩季時,流量算不出來但存量取得到,會產生一個只有現金與
+負債比率的空殼年度,還會佔掉三年視窗一格把完整的舊年度擠掉
+(109 檔裡 108 檔的當年度是空殼,而完整的 2023 只剩 1 檔留得住)。
+
+### 另外評估過但不適用的:`anthropics/financial-services-plugins`
+
+7 個 vertical plugin、228 個 md,做得完整但不是為台股寫的:
+`grep -rli "taiwan|台股|TWSE" plugins/` 零個結果;
+`financial-analysis/.mcp.json` 掛的是 FactSet / S&P Global / Moody's /
+PitchBook / Morningstar / LSEG 等付費機構資料源;
+`3-statement-model` 的資料源文件是 `sec-filings.md`,走 SEC EDGAR。
+
+模型邏輯(DCF、comps、LBO)通用,但資料管線接不上台股。
+建議當方法論參考,不要當程式用。
+
+> 順帶一提,該檔 `.mcp.json` 本身是壞的 —— `egnyte` 後缺逗號、`box` 少一個
+> 右括號,`json.load()` 會在第 47 行失敗。同 repo 其他四個 `.mcp.json` 正常。
+
 ## 六、兩邊的分工建議
 
 `tw_stock_backtest/` 的架構比 `research/` 好:設定集中在 `config.py`、因子可加權、
