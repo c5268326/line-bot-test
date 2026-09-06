@@ -52,6 +52,7 @@ def main() -> int:
     for filename, tag_id, label in (
         ("stocks.json", "seed-stocks", "行情"),
         ("backtest.json", "seed-backtest", "回測"),
+        ("financials.json", "seed-financials", "財報"),
     ):
         data_path = os.path.join(ROOT, "docs", "data", filename)
         if not os.path.exists(data_path):

@@ -375,6 +375,62 @@ dialog::backdrop { background: rgba(16,23,37,.45); }
 .err { color: var(--up); font-size: 13px; margin-top: 8px; font-weight: 500; }
 .err:empty { display: none; }
 
+/* ===== 基本面(三張財報)===== */
+/* 驗證列:讓資料從哪來、可不可信,在看到數字之前就先說清楚 */
+.fund-verify {
+  display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center;
+  padding: 9px 15px; border-bottom: 1px solid var(--rule); background: var(--surface-2);
+  font-family: var(--mono); font-size: 11px; color: var(--ink-muted);
+}
+.fund-verify b { color: var(--ink); font-weight: 600; }
+.fund-badge {
+  padding: 1px 7px; border: 1px solid; border-radius: 2px; font-weight: 500;
+  letter-spacing: .06em; text-transform: uppercase; font-size: 9.5px;
+}
+.fund-badge.ok { color: var(--down); border-color: #B9DDCE; background: var(--down-soft); }
+.fund-badge.warn { color: #7A5A0B; border-color: #E6C36B; background: #FDF8EC; }
+.fund-badge.err { color: var(--up); border-color: #EFC5C0; background: var(--up-soft); }
+.fund-verify a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 2px; }
+.fund-verify a:hover { color: var(--live); }
+/* 警示條:數字荒謬時要講出來,不是照樣畫圖 */
+.fund-warns { padding: 10px 15px; border-bottom: 1px solid var(--rule); background: #FDF8EC; }
+.fund-warns li { font-size: 12.5px; color: #4A3B14; margin-bottom: 3px; }
+.fund-warns li:last-child { margin-bottom: 0; }
+.fund-warns b { font-family: var(--mono); font-size: 11.5px; }
+/* KPI:五格,每格一定帶具體數字,不能只寫方向 */
+.fund-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(178px, 1fr)); gap: 1px; background: var(--rule); }
+.fund-kpi { background: var(--surface); padding: 12px 15px; border-left: 3px solid var(--rule-strong); }
+.fund-kpi.is-good { border-left-color: var(--down); }
+.fund-kpi.is-warn { border-left-color: var(--ma-mid); }
+.fund-kpi.is-bad  { border-left-color: var(--up); }
+.fund-kpi-v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 21px; font-weight: 600; line-height: 1.2; margin-top: 3px; }
+.fund-kpi-c { font-size: 11.5px; line-height: 1.55; color: var(--ink-muted); margin-top: 3px; }
+.fund-kpi-c b { font-family: var(--mono); font-weight: 600; color: var(--ink-2); }
+/* 三年趨勢表,最後一欄是判讀而不是又一個數字 */
+table.fund { width: 100%; border-collapse: collapse; min-width: 620px; }
+table.fund th {
+  text-align: right; padding: 8px 12px; background: var(--surface-2);
+  border-bottom: 1px solid var(--rule-strong); white-space: nowrap;
+  font-family: var(--mono); font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+  color: var(--ink-muted); font-weight: 500;
+}
+table.fund th:first-child, table.fund td:first-child { text-align: left; }
+table.fund th:last-child, table.fund td:last-child { text-align: left; width: 30%; }
+table.fund td {
+  padding: 8px 12px; border-bottom: 1px solid var(--rule); text-align: right;
+  font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px;
+}
+table.fund td:first-child { font-family: var(--sans); font-size: 13px; }
+table.fund td:last-child { font-family: var(--sans); font-size: 12px; }
+table.fund tr.sect td {
+  background: var(--surface-2); font-family: var(--mono); font-size: 10px;
+  letter-spacing: .09em; text-transform: uppercase; color: var(--ink-muted); padding: 6px 12px;
+}
+.trend-up::before { content: "\25B2 "; }
+.trend-down::before { content: "\25BC "; }
+.trend-flat::before { content: "\25A0 "; }
+.trend-flat { color: var(--ink-muted); }
+
 /* ===== 策略回測頁 ===== */
 .bt-intro { max-width: 74ch; font-size: 14px; color: var(--ink-2); line-height: 1.8; margin: 0 0 16px; }
 .bt-cfg { display: flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--rule); background: var(--surface); margin-bottom: 16px; }
@@ -552,6 +608,19 @@ table.bt tr.is-bench td:first-child { font-weight: 700; }
           <span class="panel-note" id="events-note"></span>
         </div>
         <div class="panel-body"><div class="evlist" id="events"></div></div>
+      </div>
+    </div>
+
+    <div class="panel" id="fund-card" style="margin-top:14px" hidden>
+      <div class="panel-head">
+        <h3 class="panel-title">基本面 ・ 三張財報</h3>
+        <span class="panel-note" id="fund-note"></span>
+      </div>
+      <div class="fund-verify" id="fund-verify"></div>
+      <ul class="fund-warns" id="fund-warns" hidden></ul>
+      <div class="fund-kpis" id="fund-kpis"></div>
+      <div class="tablewrap" style="border:none;border-top:1px solid var(--rule)">
+        <table class="fund"><thead id="fund-head"></thead><tbody id="fund-body"></tbody></table>
       </div>
     </div>
 
@@ -1687,6 +1756,147 @@ function renderEvents() {
   }).join("");
 }
 
+/* ============ 基本面(三張財報)============
+   資料由 research/fetch_financials.py 從 FinMind 抓取。
+   原本想用的 Goodinfo 對資料中心 IP 回 403,進不了自動化管線。 */
+const fund = { data: null, tried: false };
+
+async function loadFundamentals() {
+  if (fund.tried) return fund.data;
+  fund.tried = true;
+  const el = document.getElementById("seed-financials");
+  if (el && el.textContent.trim()) {
+    try { fund.data = JSON.parse(el.textContent); } catch (e) { /* 壞掉就走 fetch */ }
+  }
+  if (!fund.data) fund.data = await tryFetch("data/financials.json");
+  return fund.data;
+}
+
+// 億元。FinMind 給的是元,除以 1e8 才是台灣財報習慣的單位。
+const yi = v => v == null || !Number.isFinite(v) ? null : v / 1e8;
+const pctv = (v, d = 1) => v == null || !Number.isFinite(v) ? "—" : v.toFixed(d) + "%";
+const amt = (v, d = 0) => { const x = yi(v); return x == null ? "—" : nf(x, d); };
+
+/* 趨勢判讀:回傳 {cls, txt}。文字一定帶一個關鍵事實,不是只寫方向。 */
+function trend(series, opts) {
+  const o = opts || {};
+  const vals = series.filter(v => v != null && Number.isFinite(v));
+  if (vals.length < 2) return { cls: "trend-flat", txt: "資料不足" };
+  const first = vals[0], last = vals[vals.length - 1], d = last - first;
+  const unit = o.pp ? "pp" : "%";
+  const chg = o.pp ? d.toFixed(1) : (first === 0 ? null : (d / Math.abs(first) * 100).toFixed(0));
+  const band = o.band || (o.pp ? 1.5 : 5);
+  const good = o.lowerBetter ? -1 : 1;
+  if (chg == null) return { cls: "trend-flat", txt: "無法比較" };
+  if (Math.abs(o.pp ? d : +chg) < band) {
+    return { cls: "trend-flat", txt: `三年變動 ${d >= 0 ? "+" : "−"}${Math.abs(o.pp ? d : +chg).toFixed(o.pp ? 1 : 0)}${unit},持平` };
+  }
+  const rising = d > 0;
+  const cls = (rising ? good : -good) > 0 ? "trend-up up" : "trend-down down";
+  const word = rising ? "升" : "降";
+  return { cls, txt: `${word} ${Math.abs(o.pp ? d : +chg).toFixed(o.pp ? 1 : 0)}${unit}${o.tail ? "," + o.tail(last) : ""}` };
+}
+
+function renderFundamentals() {
+  const card = document.getElementById("fund-card");
+  const a = state.analysis[state.selected];
+  const ds = state.datasets.find(d => d.id === state.selected);
+  // 個股代號就是 dataset id 的前四碼數字;示範或手動資料沒有對應財報
+  const sid = ds && /^\d{4}$/.test(String(ds.id)) ? String(ds.id) : null;
+  const rec = fund.data && sid ? fund.data.stocks[sid] : null;
+
+  if (!fund.data) { card.hidden = true; return; }
+  card.hidden = false;
+
+  if (!rec) {
+    document.getElementById("fund-note").textContent = "無資料";
+    document.getElementById("fund-verify").innerHTML =
+      `<span>${esc(ds ? ds.name : "這檔")}沒有對應的財報資料 —— 手動貼上與示範資料不會有,上市櫃個股則可能尚未被收錄。</span>`;
+    document.getElementById("fund-warns").hidden = true;
+    document.getElementById("fund-kpis").innerHTML = "";
+    document.getElementById("fund-head").innerHTML = "";
+    document.getElementById("fund-body").innerHTML = "";
+    return;
+  }
+
+  const ys = rec.years, m = rec.metrics, last = m[ys[ys.length - 1]] || {};
+  const col = k => ys.map(y => (m[y] || {})[k]);
+  document.getElementById("fund-note").textContent = `${ys[0]} ~ ${ys[ys.length - 1]} 年報`;
+
+  // --- 驗證列 ---
+  const warns = (rec.verification && rec.verification.sanity) || [];
+  const errs = warns.filter(w => w.level === "error").length;
+  const badge = errs ? `<span class="fund-badge err">合理性 ${errs} 項異常</span>`
+    : warns.length ? `<span class="fund-badge warn">合理性 ${warns.length} 項提醒</span>`
+      : `<span class="fund-badge ok">合理性檢查通過</span>`;
+  document.getElementById("fund-verify").innerHTML =
+    `<span>來源 <b>${esc(fund.data.source || "FinMind")}</b></span>
+     <span>單位 <b>億元</b></span>
+     <span>基準 <b>${esc(fund.data.basis === "cumulative" ? "累計" : "單季加總")}</b></span>
+     ${badge}
+     <a href="${esc(rec.mops_url)}" target="_blank" rel="noopener">到公開資訊觀測站核對原始申報 ↗</a>`;
+
+  const wl = document.getElementById("fund-warns");
+  wl.hidden = warns.length === 0;
+  wl.innerHTML = warns.map(w => `<li><b>${esc(w.field)}</b> ${esc(w.msg)}</li>`).join("");
+
+  // --- KPI:五格,每格帶三年數列而不是只有一個數字 ---
+  const seq = (k, f) => ys.map(y => f((m[y] || {})[k])).join(" → ");
+  const grade = (v, good, bad, lower) => v == null ? ""
+    : lower ? (v <= good ? " is-good" : v >= bad ? " is-bad" : " is-warn")
+      : (v >= good ? " is-good" : v <= bad ? " is-bad" : " is-warn");
+
+  const kpis = [
+    ["毛利率", pctv(last.gross_margin), seq("gross_margin", v => pctv(v)), grade(last.gross_margin, 30, 10)],
+    ["營業利益率", pctv(last.op_margin), seq("op_margin", v => pctv(v)), grade(last.op_margin, 15, 3)],
+    ["ROE", pctv(last.roe), seq("roe", v => pctv(v)), grade(last.roe, 15, 5)],
+    ["流動比率", pctv(last.current_ratio, 0), seq("current_ratio", v => pctv(v, 0)), grade(last.current_ratio, 150, 100)],
+    ["負債比率", pctv(last.debt_ratio, 0), seq("debt_ratio", v => pctv(v, 0)), grade(last.debt_ratio, 40, 60, true)],
+  ];
+  document.getElementById("fund-kpis").innerHTML = kpis.map(([k, v, c, g]) =>
+    `<div class="fund-kpi${g}"><div class="lbl">${esc(k)}</div>
+     <div class="fund-kpi-v">${esc(v)}</div>
+     <div class="fund-kpi-c"><b>${esc(c)}</b></div></div>`).join("");
+
+  // --- 三年表 ---
+  document.getElementById("fund-head").innerHTML =
+    `<tr><th>項目</th>${ys.map(y => `<th>${esc(y)}</th>`).join("")}<th>趨勢評估</th></tr>`;
+
+  const rows = [
+    ["sect", "損益"],
+    ["營業收入(億)", "revenue", amt, { tail: v => `最新 ${nf(yi(v), 0)} 億` }],
+    ["營業毛利(億)", "gross_profit", amt, {}],
+    ["營業利益(億)", "operating_income", amt, {}],
+    ["稅後淨利(億)", "net_income", amt, {}],
+    ["每股盈餘(元)", "eps", v => v == null ? "—" : nf(v, 2), { tail: v => `最新 ${nf(v, 2)} 元` }],
+    ["sect", "獲利能力"],
+    ["毛利率", "gross_margin", v => pctv(v), { pp: true }],
+    ["費用率", "opex_ratio", v => pctv(v), { pp: true, lowerBetter: true }],
+    ["營業利益率", "op_margin", v => pctv(v), { pp: true }],
+    ["淨利率", "net_margin", v => pctv(v), { pp: true }],
+    ["ROE", "roe", v => pctv(v), { pp: true }],
+    ["ROA", "roa", v => pctv(v), { pp: true }],
+    ["sect", "財務健全度"],
+    ["現金及約當現金(億)", "cash", amt, {}],
+    ["存貨(億)", "inventories", amt, { lowerBetter: true }],
+    ["流動比率", "current_ratio", v => pctv(v, 0), { pp: true, band: 10, tail: v => v < 100 ? "低於 100% 需留意" : "" }],
+    ["負債比率", "debt_ratio", v => pctv(v, 0), { pp: true, band: 3, lowerBetter: true, tail: v => v > 60 ? "高於 60% 需留意" : "" }],
+    ["sect", "現金流量"],
+    ["營業現金流(億)", "operating_cf", amt, { tail: v => v < 0 ? "為負,須查明原因" : "" }],
+    ["投資現金流(億)", "investing_cf", amt, {}],
+    ["自由現金流(億)", "free_cf", amt, { tail: v => v < 0 ? "為負,資本支出大於營運現金" : "" }],
+  ];
+
+  document.getElementById("fund-body").innerHTML = rows.map(r => {
+    if (r[0] === "sect") return `<tr class="sect"><td colspan="${ys.length + 2}">${esc(r[1])}</td></tr>`;
+    const [label, key, fmt, opt] = r;
+    const vals = col(key);
+    const t = trend(vals, opt);
+    return `<tr><td>${esc(label)}</td>${vals.map(v => `<td>${esc(fmt(v))}</td>`).join("")}
+            <td class="${t.cls}">${esc(t.txt)}</td></tr>`;
+  }).join("");
+}
+
 function renderDetail() {
   const sel = document.getElementById("sel-symbol");
   sel.innerHTML = state.datasets.map(d =>
@@ -1699,6 +1909,7 @@ function renderDetail() {
   if (!a) return;
   renderChart(); renderReadout(); renderLegend(); renderMetrics(); renderEvents();
   updateCrosshair();
+  loadFundamentals().then(() => { if (state.view === "detail") renderFundamentals(); });
 }
 
 function render() {
