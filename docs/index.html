@@ -1218,6 +1218,7 @@ async function loadFeed() {
       if (!id) continue;
       sets.push({
         id: "live-" + id.replace(/[^A-Za-z0-9_.\-~:@+]/g, ""),
+        code: id,                      // 原始證券代號,財報要靠它對應
         name: s.name ? `${id} ${s.name}` : id,
         src: "live",
         note: `${s.bars.length} 筆日線`,
@@ -1777,32 +1778,38 @@ const yi = v => v == null || !Number.isFinite(v) ? null : v / 1e8;
 const pctv = (v, d = 1) => v == null || !Number.isFinite(v) ? "—" : v.toFixed(d) + "%";
 const amt = (v, d = 0) => { const x = yi(v); return x == null ? "—" : nf(x, d); };
 
-/* 趨勢判讀:回傳 {cls, txt}。文字一定帶一個關鍵事實,不是只寫方向。 */
+/* 趨勢判讀:回傳 {cls, txt}。
+   箭頭與顏色一律表示「數字往哪走」,沿用這一頁其他地方的紅漲綠跌;
+   「這是好是壞」交給 KPI 的左側色條與 tail 的提醒文字,不要兩個意思擠在同一個顏色裡。 */
 function trend(series, opts) {
   const o = opts || {};
   const vals = series.filter(v => v != null && Number.isFinite(v));
   if (vals.length < 2) return { cls: "trend-flat", txt: "資料不足" };
   const first = vals[0], last = vals[vals.length - 1], d = last - first;
+  if (!o.pp && first === 0) return { cls: "trend-flat", txt: "無法比較" };
+
+  const mag = o.pp ? Math.abs(d) : Math.abs(d / first * 100);
   const unit = o.pp ? "pp" : "%";
-  const chg = o.pp ? d.toFixed(1) : (first === 0 ? null : (d / Math.abs(first) * 100).toFixed(0));
-  const band = o.band || (o.pp ? 1.5 : 5);
-  const good = o.lowerBetter ? -1 : 1;
-  if (chg == null) return { cls: "trend-flat", txt: "無法比較" };
-  if (Math.abs(o.pp ? d : +chg) < band) {
-    return { cls: "trend-flat", txt: `三年變動 ${d >= 0 ? "+" : "−"}${Math.abs(o.pp ? d : +chg).toFixed(o.pp ? 1 : 0)}${unit},持平` };
+  const band = o.band != null ? o.band : (o.pp ? 1.5 : 5);
+  const tail = o.tail ? o.tail(last) : "";
+  const suffix = tail ? "," + tail : "";
+
+  if (mag < band) {
+    return { cls: "trend-flat", txt: `三年變動 ${d >= 0 ? "+" : "−"}${mag.toFixed(o.pp ? 1 : 0)}${unit},持平${suffix}` };
   }
-  const rising = d > 0;
-  const cls = (rising ? good : -good) > 0 ? "trend-up up" : "trend-down down";
-  const word = rising ? "升" : "降";
-  return { cls, txt: `${word} ${Math.abs(o.pp ? d : +chg).toFixed(o.pp ? 1 : 0)}${unit}${o.tail ? "," + o.tail(last) : ""}` };
+  const up = d > 0;
+  return {
+    cls: up ? "trend-up up" : "trend-down down",
+    txt: `${up ? "升" : "降"} ${mag.toFixed(o.pp ? 1 : 0)}${unit}${suffix}`,
+  };
 }
 
 function renderFundamentals() {
   const card = document.getElementById("fund-card");
   const a = state.analysis[state.selected];
   const ds = state.datasets.find(d => d.id === state.selected);
-  // 個股代號就是 dataset id 的前四碼數字;示範或手動資料沒有對應財報
-  const sid = ds && /^\d{4}$/.test(String(ds.id)) ? String(ds.id) : null;
+  // 只有行情來源的資料集帶得出證券代號;示範與手動貼上的沒有,自然也沒有財報
+  const sid = ds && ds.code && /^\d{4}$/.test(ds.code) ? ds.code : null;
   const rec = fund.data && sid ? fund.data.stocks[sid] : null;
 
   if (!fund.data) { card.hidden = true; return; }
@@ -1871,16 +1878,16 @@ function renderFundamentals() {
     ["每股盈餘(元)", "eps", v => v == null ? "—" : nf(v, 2), { tail: v => `最新 ${nf(v, 2)} 元` }],
     ["sect", "獲利能力"],
     ["毛利率", "gross_margin", v => pctv(v), { pp: true }],
-    ["費用率", "opex_ratio", v => pctv(v), { pp: true, lowerBetter: true }],
+    ["費用率", "opex_ratio", v => pctv(v), { pp: true }],
     ["營業利益率", "op_margin", v => pctv(v), { pp: true }],
     ["淨利率", "net_margin", v => pctv(v), { pp: true }],
     ["ROE", "roe", v => pctv(v), { pp: true }],
     ["ROA", "roa", v => pctv(v), { pp: true }],
     ["sect", "財務健全度"],
     ["現金及約當現金(億)", "cash", amt, {}],
-    ["存貨(億)", "inventories", amt, { lowerBetter: true }],
+    ["存貨(億)", "inventories", amt, {}],
     ["流動比率", "current_ratio", v => pctv(v, 0), { pp: true, band: 10, tail: v => v < 100 ? "低於 100% 需留意" : "" }],
-    ["負債比率", "debt_ratio", v => pctv(v, 0), { pp: true, band: 3, lowerBetter: true, tail: v => v > 60 ? "高於 60% 需留意" : "" }],
+    ["負債比率", "debt_ratio", v => pctv(v, 0), { pp: true, band: 3, tail: v => v > 60 ? "高於 60% 需留意" : "" }],
     ["sect", "現金流量"],
     ["營業現金流(億)", "operating_cf", amt, { tail: v => v < 0 ? "為負,須查明原因" : "" }],
     ["投資現金流(億)", "investing_cf", amt, {}],
