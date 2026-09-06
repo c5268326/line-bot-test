@@ -84,7 +84,7 @@ CF_FIELDS = {"NetCashInflowFromOperatingActivities", "CashProvidedByInvestingAct
 LEVEL_IN_CF = {"CashBalancesEndOfPeriod", "CashBalancesBeginningOfPeriod"}
 
 # 產出格式版本。改動衍生邏輯時要一併加一,續抓才不會沿用舊格式算出來的值。
-SCHEMA = 2
+SCHEMA = 3
 
 
 def detect_basis(sid, year):
@@ -150,9 +150,16 @@ def annualize(per_date, basis, flow_fields):
 
 
 def ratios(is_y, bs_y, cf_y):
-    """由三表算出比率。缺項就留 None,不用別的數字硬湊。"""
+    """
+    由三表算出比率。缺項就留 None,不用別的數字硬湊。
+
+    只走損益表有的年度。annualize() 的守門是逐張報表判斷的,而資產負債表
+    沒有任何流量欄位,不完整的當年度會從那裡漏過來 —— 用聯集就會把它撿回,
+    產生一個只有現金與負債比率的空殼年度,還佔掉三年視窗一格。
+    年報要成立的前提是那一年有營收,所以以損益表為準。
+    """
     out = {}
-    for y in sorted(set(is_y) | set(bs_y) | set(cf_y)):
+    for y in sorted(is_y):
         i, b, c = is_y.get(y, {}), bs_y.get(y, {}), cf_y.get(y, {})
         rev, eq, ta = i.get("Revenue"), b.get("Equity"), b.get("TotalAssets")
         ni = i.get("IncomeAfterTaxes")

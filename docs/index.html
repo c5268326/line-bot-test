@@ -1780,28 +1780,48 @@ const amt = (v, d = 0) => { const x = yi(v); return x == null ? "—" : nf(x, d)
 
 /* 趨勢判讀:回傳 {cls, txt}。
    箭頭與顏色一律表示「數字往哪走」,沿用這一頁其他地方的紅漲綠跌;
-   「這是好是壞」交給 KPI 的左側色條與 tail 的提醒文字,不要兩個意思擠在同一個顏色裡。 */
+   「這是好是壞」交給 KPI 的左側色條與 tail 的提醒文字。
+
+   遇到負數不算百分比 —— 虧損從 12 億變成 100 億說「降 716%」沒有人看得懂,
+   而投資現金流本來就長期為負,百分比更是毫無意義。改成直接講發生了什麼事。 */
 function trend(series, opts) {
   const o = opts || {};
   const vals = series.filter(v => v != null && Number.isFinite(v));
   if (vals.length < 2) return { cls: "trend-flat", txt: "資料不足" };
   const first = vals[0], last = vals[vals.length - 1], d = last - first;
-  if (!o.pp && first === 0) return { cls: "trend-flat", txt: "無法比較" };
-
-  const mag = o.pp ? Math.abs(d) : Math.abs(d / first * 100);
-  const unit = o.pp ? "pp" : "%";
-  const band = o.band != null ? o.band : (o.pp ? 1.5 : 5);
   const tail = o.tail ? o.tail(last) : "";
   const suffix = tail ? "," + tail : "";
+  const dir = up => up ? "trend-up up" : "trend-down down";
 
-  if (mag < band) {
-    return { cls: "trend-flat", txt: `三年變動 ${d >= 0 ? "+" : "−"}${mag.toFixed(o.pp ? 1 : 0)}${unit},持平${suffix}` };
+  // 百分點是可加減的,負值不影響解讀
+  if (o.pp) {
+    const band = o.band != null ? o.band : 1.5;
+    if (Math.abs(d) < band) {
+      return { cls: "trend-flat", txt: `${vals.length} 年變動 ${d >= 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}pp,持平${suffix}` };
+    }
+    return { cls: dir(d > 0), txt: `${d > 0 ? "升" : "降"} ${Math.abs(d).toFixed(1)}pp${suffix}` };
   }
-  const up = d > 0;
-  return {
-    cls: up ? "trend-up up" : "trend-down down",
-    txt: `${up ? "升" : "降"} ${mag.toFixed(o.pp ? 1 : 0)}${unit}${suffix}`,
-  };
+
+  // 金額:只要有一端非正,百分比就會失去意義,改用文字描述
+  if (first <= 0 || last <= 0) {
+    if (first < 0 && last >= 0) return { cls: dir(true), txt: `由負轉正${suffix}` };
+    if (first >= 0 && last < 0) return { cls: dir(false), txt: `由正轉負${suffix}` };
+    if (first < 0 && last < 0) {
+      if (Math.abs(d) < Math.abs(first) * 0.05) {
+        return { cls: "trend-flat", txt: `持續為負,變動不大${suffix}` };
+      }
+      return d < 0 ? { cls: dir(false), txt: `負值擴大${suffix}` }
+                   : { cls: dir(true), txt: `負值收斂${suffix}` };
+    }
+    return { cls: "trend-flat", txt: `無法以百分比比較${suffix}` };
+  }
+
+  const mag = Math.abs(d / first * 100);
+  const band = o.band != null ? o.band : 5;
+  if (mag < band) {
+    return { cls: "trend-flat", txt: `${vals.length} 年變動 ${d >= 0 ? "+" : "−"}${mag.toFixed(0)}%,持平${suffix}` };
+  }
+  return { cls: dir(d > 0), txt: `${d > 0 ? "升" : "降"} ${mag.toFixed(0)}%${suffix}` };
 }
 
 function renderFundamentals() {
