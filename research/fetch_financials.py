@@ -79,6 +79,12 @@ BS_FIELDS = {"CashAndCashEquivalents", "Inventories", "AccountsReceivableNet",
 CF_FIELDS = {"NetCashInflowFromOperatingActivities", "CashProvidedByInvestingActivities",
              "CashFlowsProvidedFromFinancingActivities", "PropertyAndPlantAndEquipment",
              "CashBalancesEndOfPeriod", "Depreciation"}
+# 期末現金雖然列在現金流量表裡,但它是「某一天的餘額」,不是期間流量。
+# 四季相加會得到四倍的假數字 —— 這正是交叉核對抓到的那 215 筆警示。
+LEVEL_IN_CF = {"CashBalancesEndOfPeriod", "CashBalancesBeginningOfPeriod"}
+
+# 產出格式版本。改動衍生邏輯時要一併加一,續抓才不會沿用舊格式算出來的值。
+SCHEMA = 2
 
 
 def detect_basis(sid, year):
@@ -112,28 +118,32 @@ def detect_basis(sid, year):
 
 
 def annualize(per_date, basis, flow_fields):
-    """把季資料整理成 {年: {科目: 年度值}}。存量科目(資產負債表)一律取年末。"""
+    """
+    把季資料整理成 {年: {科目: 年度值}}。
+
+    存量(資產負債表科目、現金流量表裡的期末/期初現金)取年末那一季;
+    流量(營收、獲利、營業現金流)在單季基準下要四季齊全才加總。
+
+    當年度通常只有一兩季,流量算不出來 —— 這種年度整年不輸出,
+    否則它會佔掉三年視窗的一格,把一個完整的舊年度擠掉。
+    """
     out = {}
-    years = sorted({d[:4] for d in per_date})
-    for y in years:
+    for y in sorted({d[:4] for d in per_date}):
         qs = sorted(d for d in per_date if d.startswith(y))
         if not qs:
             continue
-        vals = {}
         keys = set()
         for d in qs:
             keys |= set(per_date[d])
+        is_flow = lambda k: k in flow_fields and k not in LEVEL_IN_CF
+        if basis != "cumulative" and len(qs) != 4 and any(is_flow(k) for k in keys):
+            continue                                   # 不完整的年度,整年不要
+        vals = {}
         for k in keys:
             series = [per_date[d][k] for d in qs if k in per_date[d]]
             if not series:
                 continue
-            if k not in flow_fields:
-                vals[k] = series[-1]                       # 存量:取年末
-            elif basis == "cumulative":
-                vals[k] = series[-1]                       # 流量累計:取最後一季
-            else:
-                vals[k] = sum(series) if len(qs) == 4 else None   # 單季:四季齊全才加總
-        vals = {k: v for k, v in vals.items() if v is not None}
+            vals[k] = sum(series) if (is_flow(k) and basis != "cumulative") else series[-1]
         if vals:
             out[y] = vals
     return out
@@ -208,9 +218,13 @@ def load_existing():
     if not os.path.exists(DEST):
         return {}
     try:
-        return (json.load(open(DEST, encoding="utf-8")) or {}).get("stocks") or {}
+        prev = json.load(open(DEST, encoding="utf-8")) or {}
     except (ValueError, OSError):
         return {}
+    if prev.get("schema") != SCHEMA:
+        print(f"既有產出是舊格式(schema {prev.get('schema')} ≠ {SCHEMA}),重新計算", flush=True)
+        return {}
+    return prev.get("stocks") or {}
 
 
 def save(out):
@@ -243,6 +257,7 @@ def main():
         print(f"續抓:已有 {len(done)} 檔,尚缺 {len(ids) - len(done)} 檔\n", flush=True)
 
     out = {"updated_at": time.strftime("%Y-%m-%dT%H:%M:%S+00:00"),
+           "schema": SCHEMA,
            "source": "FinMind", "basis": basis, "basis_note": why,
            "note": "Goodinfo 對資料中心 IP 回 403,故改用 FinMind;科目已逐一實測",
            "stocks": dict(done)}
@@ -262,7 +277,7 @@ def main():
         rat = ratios(annualize(is_r, basis, flow),
                      annualize(bs_r, basis, flow),
                      annualize(cf_r, basis, flow))
-        years = sorted(rat)[-3:]
+        years = sorted(rat)[-3:]          # 都是流量完整的年度
         rat = {y: rat[y] for y in years}
         if not rat:
             continue
