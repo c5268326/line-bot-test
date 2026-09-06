@@ -15,6 +15,7 @@ class FactorWeights:
     gross_margin: float = 0.5         # 品質：毛利率，越高越好
     debt_to_equity: float = -0.5      # 品質：負債權益比，越低越好（權重為負代表反向）
     revenue_growth_yoy: float = 1.0   # 成長：月營收年增率，越高越好
+    revenue_yoy_accel: float = 0.0    # 成長：營收年增率是否正在加速（比水準更關鍵，見下方 validated 預設）
     eps_growth_yoy: float = 0.5       # 成長：EPS 年增率，越高越好
     momentum_12_1: float = 1.0        # 動能：12-1 月報酬，越高越好
     low_volatility: float = 0.5       # 低波動：60 日年化波動度反向，越低波動分數越高
@@ -102,5 +103,33 @@ def short_term_config() -> BacktestConfig:
         roe=0.5, gross_margin=0.2, debt_to_equity=-0.2,
         revenue_growth_yoy=1.5, eps_growth_yoy=0.5,
         momentum_12_1=1.5, low_volatility=0.2, institutional_net_buy=1.0,
+    )
+    return cfg
+
+
+def validated_momentum_revenue_config() -> BacktestConfig:
+    """唯一一組不是「合理推測」、而是真的拿真實台股資料（2014-2026，point-in-time 股票池，
+    避開存活者偏誤）做過訓練期/驗證期/測試期三段式樣本外驗證的參數組合。
+
+    核心邏輯只有兩個因子：月營收年增率「正在加速」（比水準更關鍵）+ 3個月價格動能。
+    驗證結果（詳見 RESEARCH.md「反向推論」章節）：
+      訓練期(2014-2018) 勝率 53.3% → 驗證期(2019-2022) 56.4% → 測試期(2023-2026) 63.6%
+      三段方向一致、且測試期樣本數達 2115 筆，是目前唯一撐過完整樣本外驗證的組合。
+      同期基準（覆蓋股票母體平均）測試期勝率 61.4%，換算下來這組因子真正貢獻的超額勝率
+      只有 +2.2 個百分點——這才是誠實的期望值，不要被 63.6% 這個絕對數字誤導。
+    其他因子權重刻意壓到接近 0，避免混入沒驗證過的訊號稀釋掉這組已知有效的組合。
+    """
+    cfg = BacktestConfig()
+    cfg.rebalance_freq = "M"
+    cfg.top_n = 15
+    cfg.defensive_top_n = 8
+    cfg.factor_windows = FactorWindows(
+        momentum_lookback_days=63, momentum_skip_days=0, volatility_window_days=60,
+    )
+    cfg.factor_weights = FactorWeights(
+        earnings_yield=0.0, book_to_price=0.0, dividend_yield=0.0,
+        roe=0.0, gross_margin=0.0, debt_to_equity=0.0,
+        revenue_growth_yoy=0.0, revenue_yoy_accel=1.0, eps_growth_yoy=0.0,
+        momentum_12_1=1.0, low_volatility=0.0, institutional_net_buy=0.0,
     )
     return cfg

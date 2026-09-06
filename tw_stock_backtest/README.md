@@ -53,7 +53,9 @@ tw_stock_backtest/
 ├── macro.py                  # 總經濾網（SOX動能、M1B年增率、政策利率、景氣燈號 → 多空分數）
 ├── backtest.py                # 回測引擎：買進/賣出/停損/再平衡
 ├── metrics.py                 # 績效指標：CAGR/Sharpe/Sortino/MDD/勝率/對比基準
-├── run_backtest.py            # CLI 進入點
+├── run_backtest.py            # CLI 進入點（回測）
+├── pipeline.py                 # 每日選股決策管線（情緒→因子→決策→報告→建議清單，見下方說明）
+├── run_pipeline.py             # CLI 進入點（決策管線，跑一次得到「今天該不該買」的建議）
 ├── data_sources/
 │   ├── base.py                    # 抽象介面 + 固定 schema
 │   ├── synthetic_source.py        # 合成資料（本環境可用，僅供驗證程式邏輯）
@@ -129,6 +131,32 @@ python -m tw_stock_backtest.run_backtest --source synthetic --output-dir out_syn
 靠常常猜對）；但**持有期間拉長到 3 年以上，正報酬機率可以超過 90%**——不過這個數字有
 嚴重的統計限制（重疊窗口非獨立樣本、單一歷史路徑），詳見 `RESEARCH.md` 與函式 docstring，
 不要直接拿來當「保證」。
+
+## 每日選股決策管線（`pipeline.py` / `run_pipeline.py`）
+
+這是把使用者提供的一套加密貨幣槓桿交易系統（多階段：情緒判斷→技術判斷→決策→中文報告→
+自動下單，中間穿插多個 LLM 模型）改寫成的台股版本。架構模仿對方的多層風控設計（硬性否決
+→數學計算→分類分級→最終稽核），但**決策內容全部換成本專案已經誠實驗證過的規則**，沒有
+引入新的、沒驗證過的技術判斷（例如原系統的威科夫階段/SMC結構，在台股完全沒驗證過，故意
+沒有照抄）。三個刻意的差異：
+
+1. **頻率**：原系統每小時跑一次；這裡改成「每個交易日收盤後」跑一次（台股基本面/營收
+   本來就是日頻以下更新，不需要小時級）。
+2. **判斷邏輯**：原系統用 3 個 LLM 做定性判斷；這裡的因子組合（`config.validated_momentum_revenue_config()`：
+   營收年增率加速 + 3個月動能）是全部研究過程中唯一撐過訓練期/驗證期/測試期三段樣本外
+   驗證的規則（測試期勝率 63.6%，扣掉基準後真正的超額只有 +2.2 個百分點——見 `RESEARCH.md`
+   「反向推論」章節），裁決層用純 Python 規則，沒有導入新的 AI 判斷。
+3. **沒有槓桿**：原系統用「信心度→槓桿倍數（1~3倍）」分級風險，這裡改成「信心度→部位
+   權重（0%/50%/75%/100%）」，風險分級精神一樣，但不會放大虧損倍數。
+
+執行：
+```bash
+python -m tw_stock_backtest.run_pipeline --source synthetic   # 驗證程式邏輯
+python -m tw_stock_backtest.run_pipeline --source finmind --preset validated_momentum_revenue \
+    --as-of-date 2026-09-05   # 真實資料（需要有網路權限的環境）
+```
+輸出是中文報告＋結構化建議清單（`ctx.order_sheet`），**不會自動下單**——真的要接券商 API
+下單是完全不同等級的風險（金錢直接曝險、程式bug可能直接虧真錢），需要另外明確要求才會做。
 
 ## 已知限制（誠實列出，正式使用前務必知道）
 
