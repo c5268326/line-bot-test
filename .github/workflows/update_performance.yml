@@ -37,9 +37,3 @@ jobs:
           git add data/performance.json
           git diff --cached --quiet || git commit -m "自動更新業績資料 $(TZ='Asia/Taipei' date '+%Y/%m/%d %H:%M')"
           git push
-
-      - name: 寄送執行完成通知
-        env:
-          GMAIL_USER: ${{ secrets.GMAIL_USER }}
-          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
-        run: python send_notify.py
