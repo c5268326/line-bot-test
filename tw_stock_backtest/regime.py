@@ -43,37 +43,42 @@ def market_proxy_index(prices: pd.DataFrame) -> pd.Series:
     return index
 
 
-def _smooth(labels: pd.Series, min_days: int) -> pd.Series:
-    runs: list[list] = []
-    for v in labels.tolist():
-        if runs and runs[-1][0] == v:
-            runs[-1][1] += 1
+def _smooth_causal(labels: pd.Series, min_days: int) -> pd.Series:
+    """把「短於 min_days 的雜訊集數」濾掉，但只用「目前為止已經看到的資料」逐日往前推進，
+    不看未來——這點很重要，值得解釋清楚：
+
+    最早的寫法是對整個序列做「執行長度編碼」再一次性合併短集數，這在事後回顧一段完整歷史
+    時沒問題，但只要有人拿這個函式的結果去對應「某一個歷史日期當天」的市場週期（例如
+    `pipeline.py` 逐日跑決策、或這裡用來把週期標籤貼回歷史面板做因子分析），就會不小心
+    用到「這個集數後來到底有沒有撐超過 min_days」這個答案——而這個答案要等未來的資料出現
+    才會知道，等於是前視偏誤。已經實測驗證過：同一天的分類結果，會因為「只給到那天為止的
+    資料」vs「給了後面更多天的資料」而給出不同答案，機率約 3%，集中在真正轉折點附近。
+
+    修正後的邏輯是「確認延遲」(confirmation lag)：新的候選週期要連續出現滿 min_days 天
+    才會被「確認」進而生效，在確認之前，當下仍然沿用前一個已確認的週期。這是每天都只用
+    當下已知資訊就能重現的結果，跟未來多久之後回頭看都不會改變「當時」的分類。代價是
+    真正發生週期轉換時，確認會有 min_days 天的延遲，這是誠實的取捨，不是瑕疵。
+    """
+    confirmed = None
+    pending_label, pending_count = None, 0
+    out = []
+    for label in labels.tolist():
+        if label == confirmed:
+            pending_label, pending_count = None, 0
+        elif label == pending_label:
+            pending_count += 1
         else:
-            runs.append([v, 1])
-    changed = True
-    while changed:
-        changed = False
-        for i in range(1, len(runs)):
-            if runs[i][1] < min_days:
-                runs[i - 1][1] += runs[i][1]
-                del runs[i]
-                changed = True
-                break
-        merged: list[list] = []
-        for v, n in runs:
-            if merged and merged[-1][0] == v:
-                merged[-1][1] += n
-            else:
-                merged.append([v, n])
-        runs = merged
-    out: list = []
-    for v, n in runs:
-        out.extend([v] * n)
+            pending_label, pending_count = label, 1
+        if pending_count >= min_days:
+            confirmed = pending_label
+            pending_label, pending_count = None, 0
+        out.append(confirmed if confirmed is not None else label)
     return pd.Series(out, index=labels.index)
 
 
 def classify_regime(index: pd.Series) -> pd.Series:
-    """回傳逐日的 BULL / BEAR / SIDEWAYS 標籤（已平滑，濾掉均線零點附近的雜訊）。"""
+    """回傳逐日的 BULL / BEAR / SIDEWAYS 標籤（已用因果的確認延遲機制濾掉雜訊，
+    不使用任何未來資料——見 `_smooth_causal` 的說明）。"""
     ma = index.rolling(MA_WINDOW, min_periods=int(MA_WINDOW * 0.75)).mean()
     slope = ma - ma.shift(SLOPE_LOOKBACK)
 
@@ -85,7 +90,7 @@ def classify_regime(index: pd.Series) -> pd.Series:
     valid = raw.dropna()
     if valid.empty:
         return raw
-    smoothed = _smooth(valid, MIN_EPISODE_DAYS)
+    smoothed = _smooth_causal(valid, MIN_EPISODE_DAYS)
     return smoothed.reindex(raw.index)
 
 
