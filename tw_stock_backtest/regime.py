@@ -140,3 +140,20 @@ FACTOR_TILTS_BY_REGIME: dict[str, dict[str, float]] = {
     "SIDEWAYS": {"revenue_yoy_accel": 2.5},
     "BEAR": {"dividend_yield": 1.8, "revenue_yoy_accel": 1.2},
 }
+
+# 部位權重（取代 pipeline.py 早期版本裡憑感覺定的 100%/75%/50% 三檔）：直接用 RESEARCH.md
+# 第七節實測出的「營收年增率加速因子，扣掉當週期基準後的真正超額勝率」線性換算，公式是
+#   weight = clip(50% + 實測超額百分點 * 5, 30%, 100%)
+# 這裡的「5倍」只是把「幾個百分點的超額」映射到「權重該加減多少」的一個溫和、非投機的
+# 比例尺，不是另一個沒驗證過的魔術數字要拿去측試——它只決定同一組已驗證訊號在不同週期
+# 該壓多重，不會讓沒訊號的東西變成有訊號。
+#   BULL     實測超額 +3.3pp → 50 + 16.5 = 66.5%
+#   SIDEWAYS 實測超額 +8.8pp → 50 + 44.0 = 94.0%（三個週期裡訊號最強，權重也最高）
+#   BEAR     實測超額 +0.8pp → 50 +  4.0 = 54.0%（絕對勝率高是市場超跌反彈的基期效應，
+#            不是選股訊號真的變強，所以不該重壓，這點在第七節已經反覆強調過）
+POSITION_WEIGHT_BY_REGIME: dict[str, float] = {
+    "BULL": 0.665,
+    "SIDEWAYS": 0.94,
+    "BEAR": 0.54,
+}
+DEFAULT_POSITION_WEIGHT = 0.50  # 週期未知(UNKNOWN)時的保守預設值

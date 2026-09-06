@@ -51,21 +51,22 @@ from . import macro as M
 from . import regime as R
 from .config import BacktestConfig, FactorWeights
 
-MIN_RR = 1.5  # 風報比門檻，比照原系統 Step4 的 RR>=1.5 否決規則
-EXTREME_MACRO_THRESHOLD = -2.0  # 總經分數低於此值視為「極端崩盤」，比照原系統 FG<=5 的硬性否決
+EXTREME_MACRO_THRESHOLD = -2.0  # 總經分數低於此值視為「極端崩盤」；尚未用真實總經資料校準
+# 這個門檻是唯一還沒能用真實資料驗證的數字——本環境拿不到真實總經歷史序列（見 README「網路
+# 限制」一節），只能先沿用一個看起來合理的量級，等真的接上真實資料後，應該改成用歷史
+# macro_score 分布的後段百分位（例如最差10%）校準，而不是繼續憑感覺猜一個值。
 
 
 @dataclass
 class StockDecision:
     ticker: str
     score: float
-    confidence: str          # "HIGH" | "MID" | "LOW"
-    regime: str               # "TREND_ALIGNED" | "COUNTER_TREND" | "NORMAL"
-    position_weight: float    # 0.0 ~ 1.0，取代原系統的槓桿倍數
+    regime: str               # 決策當下的市場週期："BULL" | "SIDEWAYS" | "BEAR" | "UNKNOWN"
+    position_weight: float    # 0.0 ~ 1.0，取代原系統的槓桿倍數，見 regime.POSITION_WEIGHT_BY_REGIME
     entry: float
     stop: float
-    target: float
-    risk_reward: float
+    target: float | None      # 僅供參考的技術面壓力位（52週高點），不是任何形式的報酬保證
+    risk_reward: float | None  # 僅供參考，不是否決依據（見 DecisionBlock 開頭的說明）
     veto_reason: str | None = None
 
 
@@ -80,7 +81,6 @@ class MarketContext:
     factor_weights: FactorWeights = field(default_factory=FactorWeights)  # 理論層傳給訊號層
     candidates: pd.DataFrame = field(default_factory=pd.DataFrame)
     decisions: list[StockDecision] = field(default_factory=list)
-    vetoed: list[StockDecision] = field(default_factory=list)
     report_text: str = ""
     order_sheet: pd.DataFrame = field(default_factory=pd.DataFrame)
     halted: bool = False
@@ -154,10 +154,24 @@ class FactorBlock:
 
 
 class DecisionBlock:
-    """對應 DecisionBlock：硬性否決 -> MathEngine(進場/止損/目標價) -> 市場狀態分類(部位權重)
-    -> 最終稽核(風報比門檻)。裁決層刻意用純規則，不用 LLM——因為我們手上沒有針對「LLM 讀
-    技術線圖給信心分數」這件事在台股上驗證過的證據，寧可誠實地全部用已知有效的規則做。
+    """對應 DecisionBlock：硬性否決 -> MathEngine(進場/止損) -> 部位權重。
+
+    **這裡曾經有一版「風報比 RR>=1.5 否決 + 用停損反推目標價」的邏輯，已經拿掉**：
+    `config.validated_momentum_revenue_config()` 真正驗證過的策略就是「因子分數選前N檔、
+    進場、-20%停損」，沒有風報比門檻、也沒有目標價這件事。原本那組 RR 門檻是照抄加密貨幣
+    系統的結構、從沒拿台股資料驗證過會不會反而濾掉本來就有效的訊號（先射箭再畫靶：目標價
+    是用停損距離反推出來湊出 RR>=1.5，不是先預期股票會漲到哪裡），等於是拿一個沒驗證過的
+    過濾器蓋在已驗證的策略上面——這正是需要修正的「不合理之處」。現在的做法：52週高點
+    只當「僅供參考」的技術位階顯示在報告裡，不會否決任何訊號；裁決層唯一的否決依據是
+    流動性（已經在 top_n 篩選時處理）與總經硬性否決，不會另外發明新的門檻。
+
+    部位權重也不再是憑感覺定的 100%/75%/50% 三檔，改用 `regime.POSITION_WEIGHT_BY_REGIME`——
+    RESEARCH.md 第七節實測出的、依市場週期而異的真實超額勝率換算出來的權重，並在總經逆風
+    或已現轉空頭前兆時額外打對折（這是獨立於「哪個週期」之外的第二層風險訊號，兩者不應該
+    被合併成同一個判斷）。
     """
+
+    DEFENSIVE_HAIRCUT = 0.6  # 總經逆風或轉空頭前兆時，部位權重額外乘上的折扣係數
 
     def run(self, ctx: MarketContext, config: BacktestConfig, prices: pd.DataFrame) -> MarketContext:
         # Step 1：硬性否決（比照原系統 FG<=5 / NO_SETUP / NEUTRAL 三種直接 WAIT 的情況）
@@ -189,53 +203,29 @@ class DecisionBlock:
             .sort_values("date").groupby("ticker")["close"]
             .apply(lambda s: s.tail(250).max())
         )
-        median_score = candidates["score"].median() if len(candidates) else 0.0
+
+        base_weight = R.POSITION_WEIGHT_BY_REGIME.get(ctx.market_regime, R.DEFAULT_POSITION_WEIGHT)
+        weight = base_weight * self.DEFENSIVE_HAIRCUT if defensive else base_weight
 
         for _, row in candidates.iterrows():
             entry = float(row["close"])
             stop = entry * (1 - config.stop_loss_pct)
 
-            # Step 2：MathEngine —— 目標價優先用前波段高點（52週高點），
-            # 若那個目標換算出來的風報比不到門檻，改用「保底風報比」反推目標價，
-            # 確保「有目標價」不等於「隨便一個數字」，仍然錨定在 MIN_RR 這個風控門檻上。
+            # Step 2：MathEngine —— 52週高點僅供參考顯示，不影響任何進出場判斷（見上方說明）。
             resistance = resistance_by_ticker.get(row["ticker"], np.nan)
-            target = resistance if (pd.notna(resistance) and resistance > entry * (1 + MIN_RR * config.stop_loss_pct)) \
-                else entry * (1 + MIN_RR * config.stop_loss_pct)
+            target = float(resistance) if pd.notna(resistance) else None
             risk = entry - stop
-            reward = target - entry
-            rr = reward / risk if risk > 0 else float("nan")
+            rr = (target - entry) / risk if (target is not None and risk > 0) else None
 
-            decision = StockDecision(
-                ticker=row["ticker"], score=float(row["score"]), confidence="MID",
-                regime="NORMAL", position_weight=0.0,
+            ctx.decisions.append(StockDecision(
+                ticker=row["ticker"], score=float(row["score"]),
+                regime=ctx.market_regime, position_weight=round(weight, 4),
                 entry=entry, stop=stop, target=target, risk_reward=rr,
-            )
-
-            # Step 4 提前判斷否決條件（風報比門檻，比照原系統 Step4 RR>=1.5 否決規則）
-            if not (np.isfinite(rr) and rr >= MIN_RR):
-                decision.veto_reason = f"風報比 {rr:.2f} 低於門檻 {MIN_RR}，比照原系統規則直接否決。"
-                ctx.vetoed.append(decision)
-                continue
-
-            # Step 3：市場狀態分類 -> 決定信心度與部位權重（取代原系統的槓桿倍數）
-            if not defensive and ctx.macro_regime == "TAILWIND" and row["score"] >= median_score:
-                decision.regime, decision.confidence, decision.position_weight = "TREND_ALIGNED", "HIGH", 1.0
-            elif defensive and row["score"] > candidates["score"].quantile(0.9):
-                # 總經逆風或已出現轉空頭前兆，但個股分數依然是候選中的前段班 —— 對應原系統
-                # 「逆勢反轉單，信心該打折」的邏輯：允許進場，但部位權重砍半。
-                decision.regime, decision.confidence, decision.position_weight = "COUNTER_TREND", "MID", 0.5
-            elif defensive:
-                decision.veto_reason = "總經逆風或已現轉空頭前兆，且個股分數不夠突出，比照原系統「方向不明確」邏輯不進場。"
-                ctx.vetoed.append(decision)
-                continue
-            else:
-                decision.regime, decision.confidence, decision.position_weight = "NORMAL", "MID", 0.75
-
-            ctx.decisions.append(decision)
+            ))
 
         if not ctx.decisions:
             ctx.halted = True
-            ctx.halt_reason = "所有候選股都被停損距離、風報比或總經濾網否決，今天沒有建議標的。"
+            ctx.halt_reason = "所有候選股都缺少必要資料或未通過流動性篩選，今天沒有建議標的。"
         return ctx
 
 
@@ -252,13 +242,13 @@ class ReportBlock:
             ctx.report_text = "\n".join(lines)
             return ctx
 
-        lines.append(f"\n入選 {len(ctx.decisions)} 檔（否決 {len(ctx.vetoed)} 檔）：\n")
+        lines.append(f"\n入選 {len(ctx.decisions)} 檔：\n")
         for d in sorted(ctx.decisions, key=lambda x: -x.score):
+            target_str = f"{d.target:.2f}（風報比僅供參考={d.risk_reward:.2f}）" if d.target is not None else "無52週高點資料"
             lines.append(
-                f"[{d.ticker}] 分數={d.score:+.2f} 分類={d.regime} 信心={d.confidence} "
-                f"部位權重={d.position_weight:.0%}\n"
+                f"[{d.ticker}] 分數={d.score:+.2f} 週期={d.regime} 部位權重={d.position_weight:.0%}\n"
                 f"    進場={d.entry:.2f}  停損={d.stop:.2f}（-{(1 - d.stop / d.entry):.1%}）  "
-                f"目標={d.target:.2f}  風報比={d.risk_reward:.2f}"
+                f"參考壓力位={target_str}"
             )
         lines.append(
             "\n提醒：這是根據已驗證因子組合產生的建議清單，不是自動下單，"
@@ -274,15 +264,16 @@ class OrderSheetBlock:
     def run(self, ctx: MarketContext) -> MarketContext:
         if ctx.halted or not ctx.decisions:
             ctx.order_sheet = pd.DataFrame(columns=[
-                "ticker", "action", "confidence", "position_weight",
+                "ticker", "action", "regime", "position_weight",
                 "entry", "stop", "target", "risk_reward",
             ])
             return ctx
         ctx.order_sheet = pd.DataFrame([{
-            "ticker": d.ticker, "action": "BUY", "confidence": d.confidence,
+            "ticker": d.ticker, "action": "BUY", "regime": d.regime,
             "position_weight": d.position_weight, "entry": round(d.entry, 2),
-            "stop": round(d.stop, 2), "target": round(d.target, 2),
-            "risk_reward": round(d.risk_reward, 2),
+            "stop": round(d.stop, 2),
+            "target": round(d.target, 2) if d.target is not None else None,
+            "risk_reward": round(d.risk_reward, 2) if d.risk_reward is not None else None,
         } for d in ctx.decisions])
         return ctx
 
