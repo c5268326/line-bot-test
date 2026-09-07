@@ -219,6 +219,8 @@ table.scan tbody tr:last-child td { border-bottom: none; }
 .src-live { color: var(--live); border-color: #9FDCE8; background: var(--live-soft); }
 .src-demo { color: var(--ink-muted); border-color: var(--rule-strong); background: var(--surface-2); }
 .src-manual { color: var(--ma-slow); border-color: #D3C3ED; background: #F4EFFC; }
+/* 上櫃個股的行情來自 FinMind,不是證交所端點 —— 標出來,別讓人以為同一個來源 */
+.src-otc { color: var(--ma-mid); border-color: #E6C36B; background: #FDF8EC; }
 
 /* 診斷條 */
 .verdict { display: flex; align-items: center; gap: 9px; }
@@ -1213,7 +1215,8 @@ function analyze(ds, p) {
   const chg = closes[last] - prevClose;
 
   return {
-    id: ds.id, name: ds.name, src: ds.src, note: ds.note, bars, ind, events, current, score,
+    id: ds.id, name: ds.name, src: ds.src, market: ds.market || null,
+    note: ds.note, bars, ind, events, current, score,
     last, close: closes[last], chg, chgPct: prevClose ? chg / prevClose * 100 : 0,
     volRatio: ind.volMa[last] ? vols[last] / ind.volMa[last] : null
   };
@@ -1433,6 +1436,7 @@ async function loadFeed() {
       sets.push({
         id: "live-" + id.replace(/[^A-Za-z0-9_.\-~:@+]/g, ""),
         code: id,                      // 原始證券代號,財報要靠它對應
+        market: s.market || null,      // tpex = 上櫃,來源與上市不同
         name: s.name ? `${id} ${s.name}` : id,
         src: "live",
         note: `${s.bars.length} 筆日線`,
@@ -1636,7 +1640,8 @@ function renderScan() {
     return `<tr data-id="${esc(r.id)}">
       <td>
         <div class="sym-name">${esc(r.name)}</div>
-        <div class="sym-meta"><span class="src src-${r.src}">${SRC_LABEL[r.src]}</span>${esc(r.note || "")}</div>
+        <div class="sym-meta"><span class="src src-${r.src}">${SRC_LABEL[r.src]}</span>${
+          r.market === "tpex" ? '<span class="src src-otc">上櫃</span>' : ""}${esc(r.note || "")}</div>
       </td>
       <td>${sparkline(r.bars)}</td>
       <td class="t-right num px">${nf(r.close)}</td>
@@ -2188,7 +2193,8 @@ function renderFundamentals() {
 function renderDetail() {
   const sel = document.getElementById("sel-symbol");
   sel.innerHTML = state.datasets.map(d =>
-    `<option value="${esc(d.id)}"${d.id === state.selected ? " selected" : ""}>${esc(d.name)}${d.src === "demo" ? "(示範)" : ""}</option>`).join("");
+    `<option value="${esc(d.id)}"${d.id === state.selected ? " selected" : ""}>${esc(d.name)}${
+      d.market === "tpex" ? "(上櫃)" : ""}${d.src === "demo" ? "(示範)" : ""}</option>`).join("");
   const a = state.analysis[state.selected];
   document.getElementById("demo-banner").hidden = !(a && a.src === "demo");
   document.getElementById("ai-out").textContent = "";
