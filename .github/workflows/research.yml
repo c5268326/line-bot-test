@@ -19,6 +19,10 @@ on:
         description: "只抓指定年份(逗號分隔,留空為全部)"
         required: false
         default: ""
+      add_stocks:
+        description: "要加進檢測站的個股代號(逗號分隔,如 4939,6735)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -46,6 +50,7 @@ jobs:
           UNIVERSE_SIZE: ${{ inputs.universe_size }}
           FINMIND_PACE: "2.0"
           YEARS: ${{ inputs.years }}
+          ADD_STOCKS: ${{ inputs.add_stocks }}
         run: python "research/${{ inputs.script }}"
 
       - name: 提交產出結果
