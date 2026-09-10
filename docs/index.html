@@ -2106,9 +2106,16 @@ function renderFundamentals() {
   card.hidden = false;
 
   if (!rec) {
-    document.getElementById("fund-note").textContent = "無資料";
-    document.getElementById("fund-verify").innerHTML =
-      `<span>${esc(ds ? ds.name : "這檔")}沒有對應的財報資料 —— 手動貼上與示範資料不會有,上市櫃個股則可能尚未被收錄。</span>`;
+    // 「沒有財報」和「還沒抓到」是兩回事,不能都說成前者 ——
+    // 上一輪就因為 FinMind 配額用盡,把十檔有財報的公司記成「無財報」。
+    const noData = (fund.data.no_data || []).some(x => x.startsWith(sid + " "));
+    const msg = !sid
+      ? `${esc(ds ? ds.name : "這檔")}沒有證券代號 —— 手動貼上與示範資料不會有財報。`
+      : noData
+        ? `${esc(ds.name)}:資料源有回應但查無財報。銀行、金控與部分新上市公司的損益表科目與一般產業不同。`
+        : `${esc(ds.name)}:<b>尚未抓取</b>,不代表這家公司沒有財報。目前只涵蓋部分個股。`;
+    document.getElementById("fund-note").textContent = noData ? "查無財報" : "尚未抓取";
+    document.getElementById("fund-verify").innerHTML = `<span>${msg}</span>`;
     document.getElementById("fund-warns").hidden = true;
     document.getElementById("fund-kpis").innerHTML = "";
     document.getElementById("fund-head").innerHTML = "";

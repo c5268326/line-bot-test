@@ -37,7 +37,17 @@ YEARS_BACK = 4                      # 多抓一年,才算得出最舊那年的�
 LIMIT = int(os.environ.get("LIMIT", "0"))   # 0 = 全部
 
 
+class QuotaExhausted(Exception):
+    """FinMind 回 402/429:配額用盡。這和『查無資料』完全不同,不能混為一談。"""
+
+
 def get(url, tries=4, timeout=35):
+    """回傳 JSON;配額用盡時拋 QuotaExhausted,其他失敗回 None。
+
+    先前這裡把兩種情況都回 None,呼叫端一律當成「無財報」——
+    於是配額用盡的最後十檔被記成「這些公司沒有財報」,那是假的。
+    """
+    quota = False
     for i in range(tries):
         req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
         try:
@@ -45,13 +55,17 @@ def get(url, tries=4, timeout=35):
                 return json.loads(r.read())
         except Exception as e:
             code = getattr(e, "code", None)
+            quota = quota or code in (402, 429)
             wait = (8 if code in (402, 429) else 4) * (i + 1)
             print(f"      {code or type(e).__name__},{wait}s 後重試", flush=True)
             time.sleep(wait)
+    if quota:
+        raise QuotaExhausted(url)
     return None
 
 
 def fm(dataset, sid, start, end):
+    """配額用盡會往上拋,不會被誤當成空資料"""
     j = get(f"{FINMIND}?dataset={dataset}&data_id={sid}&start_date={start}&end_date={end}")
     time.sleep(PACE)
     if not j or j.get("status") != 200:
@@ -270,14 +284,24 @@ def main():
            "stocks": dict(done)}
 
     ok = len(done)
+    no_data, quota_stopped = [], None
     for n, (sid, name) in enumerate(ids, 1):
         if sid in done:
             continue
-        is_r = by_date(fm("TaiwanStockFinancialStatements", sid, start, end), IS_FIELDS)
-        bs_r = by_date(fm("TaiwanStockBalanceSheet", sid, start, end), BS_FIELDS)
-        cf_r = by_date(fm("TaiwanStockCashFlowsStatement", sid, start, end), CF_FIELDS)
+        try:
+            is_r = by_date(fm("TaiwanStockFinancialStatements", sid, start, end), IS_FIELDS)
+            bs_r = by_date(fm("TaiwanStockBalanceSheet", sid, start, end), BS_FIELDS)
+            cf_r = by_date(fm("TaiwanStockCashFlowsStatement", sid, start, end), CF_FIELDS)
+        except QuotaExhausted:
+            # 配額用盡後繼續跑只是空轉:上次這樣燒掉四十分鐘,還把十檔
+            # 記成「無財報」。直接停下,保留已完成的部分,下次續抓。
+            quota_stopped = sid
+            print(f"\n  [{n:3}/{len(ids)}] {sid} {name}:FinMind 配額用盡,停止本輪", flush=True)
+            print("  已完成的部分會保留,配額回補後重跑即可續抓", flush=True)
+            break
         if not is_r:
-            print(f"  [{n:3}/{len(ids)}] {sid} {name}:無財報,略過", flush=True)
+            no_data.append(f"{sid} {name}")
+            print(f"  [{n:3}/{len(ids)}] {sid} {name}:查無財報(API 有回應但無資料)", flush=True)
             continue
 
         flow = IS_FIELDS | CF_FIELDS          # 損益與現金流是流量,資產負債是存量
@@ -299,7 +323,11 @@ def main():
             save(out)                      # 每 10 檔落地一次,被砍也只損失最後幾檔
             print(f"  [{n:3}/{len(ids)}] 已完成 {ok} 檔", flush=True)
 
+    out["no_data"] = no_data
+    out["incomplete_from"] = quota_stopped     # 有值代表這輪沒跑完
     save(out)
+    if quota_stopped:
+        print(f"\n⚠ 本輪未跑完(停在 {quota_stopped}),不是所有個股都沒有財報", flush=True)
     warned = sum(1 for v in out["stocks"].values() if v["verification"]["sanity"])
     print(f"\n完成:{ok} 檔,{os.path.getsize(DEST)/1024:.0f} KB,"
           f"其中 {warned} 檔有合理性警示", flush=True)
