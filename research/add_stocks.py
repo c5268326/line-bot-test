@@ -98,6 +98,7 @@ def main():
             continue
 
         name = info[sid][0]
+        # name 只放公司名,代號由網頁自己加在前面
         rec = {"id": sid, "name": name, "market": info[sid][1], "bars": bars}
         (updated if sid in existing else added).append(f"{sid} {name}")
         existing[sid] = rec

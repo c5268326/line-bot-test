@@ -58,9 +58,10 @@ def main():
         sid = s["id"]
         nm = info.get(sid)
         # 現況可能是「1101 1101」(代號充當名稱)或「1101 台泥」
-        cur = s["name"].split(" ", 1)[-1] if " " in s["name"] else s["name"]
+        # 只存公司名。存成「1101 台泥」會被網頁再加一次前綴變「1101 1101 台泥」
+        cur = s["name"][len(sid):].strip() if s["name"].startswith(sid) else s["name"]
         if nm and cur != nm:
-            s["name"] = f"{sid} {nm}"
+            s["name"] = nm
             fixed += 1
         elif not nm:
             still.append(sid)

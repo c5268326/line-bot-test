@@ -93,7 +93,9 @@ def main():
         if len(rows) < MIN_BARS:
             short.append(sid)
             continue
-        stocks.append({"id": sid, "name": f"{sid} {names.get(sid, sid)}".strip(), "bars": rows})
+        # name 只放公司名,代號由網頁自己加在前面 —— 存成「1101 台泥」
+        # 會被再加一次前綴,變成「1101 1101 台泥」
+        stocks.append({"id": sid, "name": names.get(sid, ""), "bars": rows})
 
     # 併回使用者手動加入的個股
     have = {s["id"] for s in stocks}
