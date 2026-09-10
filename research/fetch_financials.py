@@ -84,7 +84,7 @@ CF_FIELDS = {"NetCashInflowFromOperatingActivities", "CashProvidedByInvestingAct
 LEVEL_IN_CF = {"CashBalancesEndOfPeriod", "CashBalancesBeginningOfPeriod"}
 
 # 產出格式版本。改動衍生邏輯時要一併加一,續抓才不會沿用舊格式算出來的值。
-SCHEMA = 3
+SCHEMA = 4
 
 
 def detect_basis(sid, year):
