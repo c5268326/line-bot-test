@@ -268,7 +268,15 @@ def main():
     end = time.strftime("%Y-%m-%d")
 
     print("=== 先判別財報是單季還是累計(用月營收交叉驗)===", flush=True)
-    basis, why = detect_basis("2330", this_year - 2)
+    try:
+        basis, why = detect_basis("2330", this_year - 2)
+    except QuotaExhausted:
+        # 判別在主迴圈之前,這裡沒接住就會變成 traceback,
+        # 看起來像程式壞了,其實只是配額還沒回補。
+        print("  FinMind 配額用盡,連基準都判別不了 —— 稍後配額回補再跑",
+              flush=True)
+        print("  既有產出未被更動", flush=True)
+        return 0
     print(f"  → {basis or '無法判別'}:{why}\n", flush=True)
     if not basis:
         raise SystemExit("✗ 無法判別財報基準,停止 —— 猜錯會讓所有比率靜默偏掉")
