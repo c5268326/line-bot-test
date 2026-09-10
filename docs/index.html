@@ -1429,6 +1429,8 @@ async function loadFeed() {
     if (!j) j = await tryFetch("data/stocks.json");
     if (!j || !Array.isArray(j.stocks) || !j.stocks.length) return null;
     const sets = [];
+    // 日期可能是共用表的索引(檔案小三成),也可能是舊格式的字串
+    const dates = Array.isArray(j.dates) ? j.dates : null;
     for (const s of j.stocks) {
       if (!s || !Array.isArray(s.bars) || s.bars.length < 30) continue;
       const id = String(s.id || s.symbol || "").trim();
@@ -1440,7 +1442,7 @@ async function loadFeed() {
         name: s.name ? `${id} ${s.name}` : id,
         src: "live",
         note: `${s.bars.length} 筆日線`,
-        bars: unpackBars(s.bars)
+        bars: unpackBars(s.bars, dates)
       });
     }
     if (!sets.length) return null;
@@ -1459,8 +1461,10 @@ const MAX_STORED_BARS = 1200;
 
 const newId = () => "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 const packBars = bars => bars.slice(-MAX_STORED_BARS).map(b => [b.d, b.o, b.h, b.l, b.c, b.v]);
-const unpackBars = rows => rows.map(r => Array.isArray(r)
-  ? { d: r[0], o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] }
+/* dates 有給的話,第一欄是它的索引;沒有就是舊格式的日期字串 */
+const unpackBars = (rows, dates) => rows.map(r => Array.isArray(r)
+  ? { d: dates && typeof r[0] === "number" ? dates[r[0]] : r[0],
+      o: +r[1], h: +r[2], l: +r[3], c: +r[4], v: +r[5] }
   : { d: r.d, o: +r.o, h: +r.h, l: +r.l, c: +r.c, v: +r.v });
 
 function initStorage() {

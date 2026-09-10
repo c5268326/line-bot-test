@@ -64,6 +64,11 @@ def main():
         print(f"  {sid}  {info[sid][0]}  市場 {info[sid][1]}  產業 {info[sid][2]}", flush=True)
 
     doc = json.load(open(DEST, encoding="utf-8"))
+    # 既有檔案的日期可能是索引,先還原成字串再處理,最後統一重編
+    old_dates = doc.get("dates")
+    if old_dates:
+        for s in doc["stocks"]:
+            s["bars"] = [[old_dates[b[0]]] + list(b[1:]) for b in s["bars"]]
     existing = {s["id"]: s for s in doc["stocks"]}
     start = (datetime.now(TW) - timedelta(days=int(KEEP * 1.8))).strftime("%Y-%m-%d")
     end = datetime.now(TW).strftime("%Y-%m-%d")
@@ -106,6 +111,11 @@ def main():
     doc["stocks"] = [existing[k] for k in sorted(existing)]
     doc["updated_at"] = datetime.now(TW).strftime("%Y-%m-%dT%H:%M:%S+08:00")
     doc["as_of"] = max(s["bars"][-1][0] for s in doc["stocks"])
+    dates = sorted({b[0] for s in doc["stocks"] for b in s["bars"]})
+    di = {d: i for i, d in enumerate(dates)}
+    for s in doc["stocks"]:
+        s["bars"] = [[di[b[0]]] + list(b[1:]) for b in s["bars"]]
+    doc["dates"] = dates
     doc["source"] = "證交所日線(經 FinMind);上櫃個股由 FinMind 直接提供"
 
     tmp = DEST + ".tmp"
