@@ -405,6 +405,10 @@ dialog::backdrop { background: rgba(16,23,37,.45); }
 .wave-caveat { padding: 11px 15px; font-size: 12.5px; line-height: 1.7; color: var(--ink-muted);
   border-top: 1px solid var(--rule); background: var(--surface-2); }
 .wave-caveat b { color: var(--ink-2); }
+/* 證據那一段要比免責聲明更顯眼:使用者最可能照著這個面板做決定,
+   而回測說它沒有預測力 —— 那句話藏起來就等於沒說 */
+.wave-evidence { border-left: 3px solid var(--ma-mid); }
+.wave-evidence b:first-child { color: var(--ma-mid); }
 
 /* ===== 基本面(三張財報)===== */
 /* 驗證列:讓資料從哪來、可不可信,在看到數字之前就先說清楚 */
@@ -654,6 +658,18 @@ table.bt tr.is-bench td:first-child { font-weight: 700; }
         同一批資料一定得到同一組結果;但「這是第幾波」永遠有多種數法,
         規則只能否證某一種,不能證實任何一種。
         全部通過只代表<b>還沒被排除</b>,不代表它是對的。
+      </p>
+      <p class="wave-caveat wave-evidence">
+        <b>回測結果:這個標記測不出預測力。</b>
+        把同一套判讀套到 2015 年以來 47 季的 point-in-time 股票池上
+        (6,868 筆個股 × 季,每一期只用當時看得到的資料),
+        「上升第 3 波進行中」的橫斷面超額是
+        <b>+0.46pp/季、t = +0.63</b> —— 和零沒有分別。
+        關鍵在對照組:<b>判讀不出結構的那 2,531 筆,表現一樣</b>(−0.16pp,t = −0.34)。
+        唯一 |t|&gt;2 的是「下跌 5 波已完成」的 −6.40pp,但同時測了 9 個標記,
+        多重比較修正後不算數,而且方向和理論相反。
+        所以這個面板請當成<b>描述走勢的工具</b>,不要當成買賣依據。
+        完整數字見 <span class="mono">research/output/wave_backtest.md</span>。
       </p>
     </div>
 
