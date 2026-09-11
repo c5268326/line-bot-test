@@ -1,0 +1,36 @@
+name: 檢查票券開賣狀態
+
+on:
+  # 手動觸發
+  workflow_dispatch:
+
+  # 每 15 分鐘檢查一次是否開賣
+  schedule:
+    - cron: "*/15 * * * *"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      - name: 安裝 Python 套件
+        run: pip install -r requirements.txt
+
+      - name: 檢查票券開賣狀態並推播提醒
+        env:
+          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
+          LINE_CHANNEL_SECRET: ${{ secrets.LINE_CHANNEL_SECRET }}
+        run: python check_ticket_release.py
+
+      - name: 提交並推送更新
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/ticket_tracking.json
+          git diff --cached --quiet || git commit -m "自動更新票券追蹤狀態 $(TZ='Asia/Taipei' date '+%Y/%m/%d %H:%M')"
+          git push

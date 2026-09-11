@@ -6,6 +6,13 @@ import os
 import json
 from datetime import datetime, timezone, timedelta
 
+from ticket_tracker import (
+    STATUS_LABELS,
+    add_tracking,
+    list_tracking_for_user,
+    remove_tracking,
+)
+
 app = Flask(__name__)
 
 CHANNEL_ACCESS_TOKEN = os.environ.get(
@@ -36,7 +43,10 @@ DATA_FILE = os.path.join(os.path.dirname(__file__), "data", "performance.json")
 HELP_TEXT = (
     "可用指令：\n"
     "・台北一區 / 桃竹苗區 / 中部地區 / 南部地區 / 台北二區 → 業績報表圖片\n"
-    "・最新業績 → 查詢各地區業績數字"
+    "・最新業績 → 查詢各地區業績數字\n"
+    "・追蹤票 <寬宏售票網址> → 開賣後自動提醒\n"
+    "・取消追蹤 <寬宏售票網址> → 取消提醒\n"
+    "・我的追蹤 → 查看目前追蹤中的票券"
 )
 
 
@@ -109,6 +119,35 @@ def handle_message(event):
                 preview_image_url=url
             )
         )
+    elif text.startswith("追蹤票"):
+        user_id = getattr(event.source, "user_id", None)
+        url = text[len("追蹤票"):].strip()
+        if not url:
+            reply = "請在指令後面附上寬宏售票網址，例如：\n追蹤票 https://kham.com.tw/..."
+        else:
+            error, ticket = add_tracking(url, user_id)
+            if error:
+                reply = error
+            else:
+                status_label = STATUS_LABELS.get(ticket["status"], "❓ 狀態未知")
+                reply = f"✅ 已開始追蹤票券\n目前狀態：{status_label}\n開賣後將會通知你"
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+    elif text.startswith("取消追蹤"):
+        user_id = getattr(event.source, "user_id", None)
+        url = text[len("取消追蹤"):].strip()
+        reply = remove_tracking(url, user_id) if url else "請在指令後面附上要取消追蹤的網址"
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
+    elif text == "我的追蹤":
+        user_id = getattr(event.source, "user_id", None)
+        tickets = list_tracking_for_user(user_id)
+        if not tickets:
+            reply = "你目前沒有追蹤任何票券"
+        else:
+            lines = ["📋 目前追蹤中的票券："]
+            for t in tickets:
+                lines.append(f"{STATUS_LABELS.get(t['status'], '❓ 狀態未知')}\n{t['url']}")
+            reply = "\n\n".join(lines)
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text=reply))
     else:
         line_bot_api.reply_message(
             event.reply_token,
