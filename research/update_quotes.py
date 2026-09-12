@@ -50,10 +50,22 @@ def num(s):
         return None
 
 
+class FetchFailed(Exception):
+    """請求失敗。和『當天不是交易日』完全不同,不能都回 None 讓呼叫端跳過。"""
+
+
 def snapshot(d):
-    """回傳 {代號: [開, 高, 低, 收, 張]};非交易日回 None。欄位一律用欄名對應。"""
+    """
+    回傳 {代號: [開, 高, 低, 收, 張]};非交易日回 None;請求失敗拋 FetchFailed。
+
+    先前兩者都回 None,呼叫端一律印「非交易日或無資料」跳過 —— 網路抖一下,
+    那一整天的全市場資料就這樣沒了,而且因為回補視窗是從 max(最後日期)
+    往後算,它永遠不會自己好。2026-09-07 就是這樣在 672 檔裡消失的。
+    """
     j = get_json(MI.format(d=d.strftime("%Y%m%d")))
-    if not j or j.get("stat") != "OK":
+    if j is None:
+        raise FetchFailed(f"{d} 證交所快照請求失敗")
+    if j.get("stat") != "OK":
         return None
     need = ("證券代號", "開盤價", "最高價", "最低價", "收盤價", "成交股數")
     for t in j.get("tables", []):
@@ -98,11 +110,20 @@ def main():
     print(f"要嘗試的日期:{[d.isoformat() for d in days]}", flush=True)
     listed = {s["id"] for s in doc["stocks"]}
     added = 0
+    failed = []
     for d in days:
-        snap = snapshot(d)
+        try:
+            snap = snapshot(d)
+        except FetchFailed as e:
+            failed.append(d)
+            print(f"  {d} ✗ {e} —— 這天沒有資料,稍後請跑 repair_quotes.py", flush=True)
+            continue
         time.sleep(TWSE_PACE)
+        if snap is None:
+            print(f"  {d} 非交易日", flush=True)
+            continue
         if not snap:
-            print(f"  {d} 非交易日或無資料", flush=True)
+            print(f"  {d} 回應正常但沒有個股資料", flush=True)
             continue
         n = 0
         ds = d.isoformat()
@@ -140,6 +161,11 @@ def main():
             n += 1
         added += n
         print(f"  上櫃 {s['id']} {s['name']}:補 {n} 筆", flush=True)
+
+    if failed:
+        print(f"\n⚠ 有 {len(failed)} 天請求失敗:{[str(d) for d in failed]}", flush=True)
+        print("  這些日期不會被下一輪自動回補(回補視窗從最後日期往後算),"
+              "請執行 research/repair_quotes.py", flush=True)
 
     if not added:
         print("\n沒有任何新資料,檔案不變", flush=True)
