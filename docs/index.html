@@ -982,6 +982,164 @@ const SIG = {
   streakDn:  { t: "連續收黑", dir: -1, w: 1, why: n => `已連續 ${n} 日收低` }
 };
 
+/* ============ 個股研究:可計算的價量結構 ============
+
+   這一段只做「從日線就能算出來、而且算法固定」的事實:
+   連漲天數、量能倍數、K 線型態、未回補缺口、上方套牢帶、均線位置、
+   相對強弱。每一項都是同樣的資料一定得到同樣的答案。
+
+   刻意不做的:產業報價、法人預估、分點進出、新聞事件。
+   那些不在日線裡,這裡拿不到 —— 憑印象寫出來的數字比沒有更糟。 */
+
+/* 連續同向天數,以及這一段累計漲跌幅。
+   「連 6 漲 18%」這種描述要兩個數字才完整:只講天數看不出幅度。 */
+function streakRun(bars) {
+  const n = bars.length;
+  if (n < 2) return null;
+  const dir = bars[n - 1].c > bars[n - 2].c ? 1 : bars[n - 1].c < bars[n - 2].c ? -1 : 0;
+  if (!dir) return { dir: 0, days: 0, pct: 0, from: bars[n - 1].d };
+  let i = n - 1;
+  while (i > 0 && (bars[i].c - bars[i - 1].c) * dir > 0) i--;
+  // i 停在起漲(跌)那天的前一天,基準價用它的收盤
+  const base = bars[i].c;
+  return { dir, days: n - 1 - i, pct: base > 0 ? (bars[n - 1].c / base - 1) : 0,
+           from: bars[i + 1] ? bars[i + 1].d : bars[i].d, baseDate: bars[i].d };
+}
+
+/* 量能:和前 5 日、前 20 日的均量比。
+   均量刻意「不含當天」—— 把當天算進去會稀釋掉自己的爆量,
+   量愈大分母被墊得愈高,結論就愈保守,那不是我們想量的東西。 */
+function volumeState(bars) {
+  const n = bars.length, v = bars[n - 1].v;
+  const avg = k => {
+    const s = bars.slice(Math.max(0, n - 1 - k), n - 1);
+    return s.length ? s.reduce((a, b) => a + b.v, 0) / s.length : null;
+  };
+  const a5 = avg(5), a20 = avg(20);
+  return {
+    v, a5, a20,
+    x5: a5 ? v / a5 : null,
+    x20: a20 ? v / a20 : null,
+    // 分級用 20 日均量:5 日均量本身就會被近期爆量帶高
+    level: !a20 ? null : v >= a20 * 2 ? "爆量" : v >= a20 * 1.5 ? "放量"
+         : v <= a20 * 0.5 ? "窒息量" : v <= a20 * 0.8 ? "量縮" : "量平",
+  };
+}
+
+/* K 線型態:用實體與影線占全距的比例判斷,不用固定金額門檻
+   —— 30 元的股票和 1000 元的股票,「跌 1 元」的意義天差地遠。 */
+function candleShape(bar, prevClose) {
+  const range = bar.h - bar.l;
+  if (!(range > 0)) return { name: "一字", body: 0, up: 0, dn: 0, chg: 0 };
+  const body = Math.abs(bar.c - bar.o);
+  const upper = bar.h - Math.max(bar.o, bar.c);
+  const lower = Math.min(bar.o, bar.c) - bar.l;
+  const bodyR = body / range, upR = upper / range, dnR = lower / range;
+  const red = bar.c >= bar.o;
+  const chg = prevClose > 0 ? bar.c / prevClose - 1 : 0;
+  let name;
+  if (bodyR < 0.1) name = upR > 0.4 && dnR > 0.4 ? "長腳十字" : "十字";
+  else if (bodyR >= 0.6) name = red ? "長紅" : "長黑";
+  else if (upR >= 0.45) name = red ? "帶上影紅K" : "帶上影黑K";
+  else if (dnR >= 0.45) name = red ? "帶下影紅K" : "帶下影黑K";
+  else name = red ? "紅K" : "黑K";
+  return { name, red, body: bodyR, up: upR, dn: dnR, chg, range: range / bar.c };
+}
+
+/* 未回補的跳空缺口。
+   缺口被「碰到」就算回補 —— 用上緣/下緣而不是完全穿越,
+   因為壓力與支撐的意義在價格觸及的那一刻就已經被測試過了。 */
+function openGaps(bars, lookback = 120) {
+  const start = Math.max(1, bars.length - lookback);
+  const out = [];
+  for (let i = start; i < bars.length; i++) {
+    const prev = bars[i - 1], cur = bars[i];
+    let g = null;
+    if (cur.l > prev.h) g = { dir: 1, lo: prev.h, hi: cur.l, i, d: cur.d };
+    else if (cur.h < prev.l) g = { dir: -1, lo: cur.h, hi: prev.l, i, d: cur.d };
+    if (!g) continue;
+    // 往後找有沒有被碰到
+    let filled = false;
+    for (let j = i + 1; j < bars.length; j++) {
+      if (g.dir === 1 ? bars[j].l <= g.lo : bars[j].h >= g.hi) { filled = true; break; }
+    }
+    if (!filled) out.push(g);
+  }
+  return out.reverse();   // 最近的排前面
+}
+
+/* 上方套牢帶 / 下方支撐帶:成交量在價格上的分布(volume profile)。
+   每根 K 棒的量平均攤在它的最高最低之間,再找目前價格上方(或下方)
+   量最集中的一段連續價區。
+
+   「套牢」是有具體意義的:那一段價位上有大量的人買在那裡,
+   股價漲回去時他們會想解套 —— 所以量愈集中、壓力愈實在。 */
+function volumeProfile(bars, lookback = 120, bins = 40) {
+  const seg = bars.slice(-lookback);
+  if (seg.length < 20) return null;
+  let lo = Infinity, hi = -Infinity;
+  for (const b of seg) { if (b.l < lo) lo = b.l; if (b.h > hi) hi = b.h; }
+  if (!(hi > lo)) return null;
+  const w = (hi - lo) / bins;
+  const vol = new Array(bins).fill(0);
+  let total = 0;
+  for (const b of seg) {
+    const a = Math.max(0, Math.min(bins - 1, Math.floor((b.l - lo) / w)));
+    const z = Math.max(0, Math.min(bins - 1, Math.floor((b.h - lo) / w)));
+    const share = b.v / (z - a + 1);
+    for (let k = a; k <= z; k++) vol[k] += share;
+    total += b.v;
+  }
+  const last = bars[bars.length - 1].c;
+  const at = p => Math.max(0, Math.min(bins - 1, Math.floor((p - lo) / w)));
+  const cur = at(last);
+
+  // 在指定側找「連續 3 格量最大」的一段,當作那一側最主要的價帶
+  const band = (from, to) => {
+    if (to - from < 2) return null;
+    let best = null;
+    for (let k = from; k <= to - 2; k++) {
+      const s = vol[k] + vol[k + 1] + vol[k + 2];
+      if (!best || s > best.s) best = { s, k };
+    }
+    if (!best || !(best.s > 0)) return null;
+    return { lo: lo + best.k * w, hi: lo + (best.k + 3) * w,
+             share: total ? best.s / total : null };
+  };
+  return {
+    overhead: band(cur + 1, bins - 1),   // 上方套牢帶
+    support: band(0, cur - 1),           // 下方支撐帶
+    poc: (() => {                        // 全期量最大的價位
+      let m = 0;
+      for (let k = 1; k < bins; k++) if (vol[k] > vol[m]) m = k;
+      return lo + (m + 0.5) * w;
+    })(),
+    lookback: seg.length,
+  };
+}
+
+/* 相對強弱:這檔在整個清單裡的報酬排名百分位。
+   絕對漲跌看不出「是自己強還是大盤在推」,要和同一段期間的其他股票比。 */
+function relativeStrength(dsList, code, days) {
+  const ret = ds => {
+    const b = ds.bars;
+    if (!b || b.length <= days) return null;
+    const a = b[b.length - 1 - days].c, z = b[b.length - 1].c;
+    return a > 0 ? z / a - 1 : null;
+  };
+  const rows = [];
+  for (const ds of dsList) {
+    const r = ret(ds);
+    if (r != null && isFinite(r)) rows.push([ds.code || ds.id, r]);
+  }
+  if (rows.length < 10) return null;
+  rows.sort((a, b) => a[1] - b[1]);
+  const i = rows.findIndex(r => r[0] === code);
+  if (i < 0) return null;
+  return { pctile: i / (rows.length - 1), ret: rows[i][1],
+           median: rows[Math.floor(rows.length / 2)][1], n: rows.length };
+}
+
 /* ============ 波浪結構(艾略特)============
 
    先講清楚這個模組能做什麼、不能做什麼。
