@@ -132,6 +132,8 @@ def main():
     finmind("TaiwanStockMonthRevenue", data_id=SID, start_date="2025-01-01", end_date=d)
     finmind("TaiwanStockPER", data_id=SID, start_date="2026-09-01", end_date=d)
 
+    probe_moved()
+
     print("\n\n########## 結論要看的兩件事 ##########")
     print("  1. 證交所那幾個端點若可用 → 全市場一次抓完,不吃 FinMind 配額")
     print("  2. 上櫃股票證交所端點沒有 → 只能靠 TPEx 或 FinMind")
@@ -139,3 +141,23 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def probe_moved():
+    """
+    第一輪 MI_MARGN(融資融券)與 TWT93U(借券)都回 404。
+    證交所改版時把路徑從 /margin/ 換到 /marginTrading/,先試新路徑,
+    再決定融資餘額要走證交所全市場(1 個 request)還是 FinMind(一檔一個)。
+    融資餘額是這份報告的重點欄位之一,值得多花一輪確認。
+    """
+    d = SAMPLE_DAY.replace("-", "")
+    print("\n\n########## 四、404 那兩個端點的其他路徑 ##########")
+    for path in ("marginTrading/MI_MARGN", "margin/MI_MARGN", "afterTrading/MI_MARGN"):
+        twse(f"https://www.twse.com.tw/rwd/zh/{path}?date={d}&selectType=ALL&response=json",
+             f"TWSE {path}")
+    for path in ("marginTrading/TWT93U", "SBL/TWT93U", "securitiesLending/TWT93U"):
+        twse(f"https://www.twse.com.tw/rwd/zh/{path}?date={d}&response=json",
+             f"TWSE {path}")
+    # 上櫃的融資融券
+    twse(f"https://www.tpex.org.tw/www/zh-tw/margin/balance?date={SAMPLE_DAY}&response=json",
+         "TPEx 上櫃融資融券餘額")

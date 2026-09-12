@@ -60,5 +60,9 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add research/data research/output docs/data 2>/dev/null || true
           git diff --cached --quiet || git commit -m "回測研究產出 $(TZ='Asia/Taipei' date '+%Y/%m/%d %H:%M')"
-          git pull --rebase --autostash origin main || true
-          git push || true
+          # 推回這次執行的那個分支,不是寫死 main。
+          # 原本寫死 main:在功能分支上跑時 rebase 會衝突 → detached HEAD → push 失敗,
+          # 整輪抓到的資料就這樣沒了(抓資料吃 API 配額,重跑成本很高)。
+          BR="${GITHUB_REF_NAME}"
+          git pull --rebase --autostash origin "$BR" || true
+          git push origin "HEAD:$BR" || true
