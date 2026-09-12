@@ -42,7 +42,7 @@ jobs:
           python-version: "3.11"
 
       - name: 安裝套件
-        run: pip install requests pandas numpy
+        run: pip install requests pandas numpy certifi
 
       - name: 執行研究程式
         env:
