@@ -1182,16 +1182,22 @@ function volumeProfile(bars, lookback = 120, bins = 40) {
     return best != null && win[best] > 0 ? mk(best) : null;
   };
 
-  // 從現價往外走,第一個「明顯的」量堆。
-  // 只報量最大的一段會有問題:一檔從 18 漲到 31 的股票,量最大的永遠是
-  // 起漲前的底部區,技術上正確但沒有用 —— 跌下去會先碰到的不是那裡。
+  /* 從現價往外走,第一段「完全落在該側、而且量不算薄」的價帶。
+
+     兩個條件都是修出來的:
+     1) 整段要落在該側。先前只從現價那一格開始掃,回傳的區間會跨過現價
+        —— 群創收 49.35,「往下先遇到」卻回 47.77~51.50,上緣比現價還高。
+        標著「往下」的東西不該往上跑。
+     2) 不要求局部高點。先前規定必須是局部極大,但價格上方的量能經常是
+        單調遞減的:群創現價上方是 4.94M → 3.43M → 2.65M 一路往下,
+        找不到局部高點,於是「往上先遇到」一路跳到 15 元之外的 65.15,
+        比「上方量最重」的 50.26 還遠 —— 讀起來完全相反。 */
   const nearest = (dir) => {
     const step = dir > 0 ? 1 : -1;
     for (let k = cur; k >= 0 && k < win.length; k += step) {
-      if (!(win[k] > medWin)) continue;
-      const l = k - 1 >= 0 ? win[k - 1] : -1;
-      const r = k + 1 < win.length ? win[k + 1] : -1;
-      if (win[k] >= l && win[k] >= r) return mk(k);   // 局部高點才算一段
+      const bLo = lo + k * w, bHi = lo + (k + 3) * w;
+      if (dir > 0 ? bLo < last : bHi > last) continue;   // 必須整段在該側
+      if (win[k] > medWin) return mk(k);
     }
     return null;
   };
