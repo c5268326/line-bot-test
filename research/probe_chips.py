@@ -139,8 +139,6 @@ def main():
     print("  2. 上櫃股票證交所端點沒有 → 只能靠 TPEx 或 FinMind")
 
 
-if __name__ == "__main__":
-    main()
 
 
 def probe_moved():
@@ -161,3 +159,7 @@ def probe_moved():
     # 上櫃的融資融券
     twse(f"https://www.tpex.org.tw/www/zh-tw/margin/balance?date={SAMPLE_DAY}&response=json",
          "TPEx 上櫃融資融券餘額")
+
+
+if __name__ == "__main__":
+    main()
