@@ -54,9 +54,11 @@ class FetchFailed(Exception):
     """請求失敗。和『查無資料』完全不同 —— 混為一談會讓整條資料源靜靜地死掉。"""
 
 
-# 有些站台(櫃買就是)偶爾少送中介憑證,系統信任庫湊不出鏈。
-# certifi 的 bundle 比較完整,先用它;沒裝就退回系統預設。
-# 絕不關掉驗證 —— 那是把一個資料問題換成一個安全問題。
+# 櫃買的伺服器沒有送出中介憑證,客戶端湊不出信任鏈。
+# 實測 certifi 的 bundle 也救不了:缺的是「伺服器沒送的那一張」,
+# 不是「我這邊信任庫不夠完整」—— 再換憑證庫都一樣。
+# 絕不關掉驗證,那是把一個資料問題換成一個安全問題。
+# 目前的作法是讓上櫃個股走 FinMind 後援(見下方 main)。
 def _ssl_ctx():
     ctx = ssl.create_default_context()
     try:
@@ -385,8 +387,34 @@ def main():
                 per_day[r["date"]]["total"] += net
             for dd, v in per_day.items():
                 chips[sid]["inst"][dd] = v
-            print(f"  {sid} FinMind 補上 {len(per_day)} 天", flush=True)
             time.sleep(2)
+
+            # 法人補完還不夠:融資餘額與本益比也要補,否則這幾檔的面板
+            # 會少兩塊,而使用者看不出是「這檔沒有」還是「我沒抓到」。
+            n_m = n_v = 0
+            try:
+                j = as_json(get(f"{FINMIND}?dataset=TaiwanStockMarginPurchaseShortSale"
+                                f"&data_id={sid}&start_date={days[0]}&end_date={days[-1]}"))
+                for r in (j or {}).get("data") or []:
+                    chips[sid]["margin"][r["date"]] = num(r.get("MarginPurchaseTodayBalance"))
+                    chips[sid]["short"][r["date"]] = num(r.get("ShortSaleTodayBalance"))
+                    n_m += 1
+                time.sleep(2)
+            except (QuotaExhausted, FetchFailed) as e:
+                print(f"  {sid} 融資補不到:{e}", flush=True)
+            try:
+                j = as_json(get(f"{FINMIND}?dataset=TaiwanStockPER"
+                                f"&data_id={sid}&start_date={days[0]}&end_date={days[-1]}"))
+                for r in (j or {}).get("data") or []:
+                    chips[sid]["value"][r["date"]] = {
+                        "per": num(r.get("PER")), "pbr": num(r.get("PBR")),
+                        "yield": num(r.get("dividend_yield"))}
+                    n_v += 1
+                time.sleep(2)
+            except (QuotaExhausted, FetchFailed) as e:
+                print(f"  {sid} 評價補不到:{e}", flush=True)
+            print(f"  {sid} FinMind 補上 法人 {len(per_day)} 天、"
+                  f"融資 {n_m} 天、評價 {n_v} 天", flush=True)
 
     print(f"\n融資融券端點:{margin_path or '找不到'}", flush=True)
     ok, detail = verify_margin(chips, days[-1])
