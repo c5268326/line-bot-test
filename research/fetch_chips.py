@@ -36,7 +36,9 @@ OUT = os.path.join(ROOT, "docs", "data", "chips.json")
 
 UA = "Mozilla/5.0 (compatible; stock-research/1.0)"
 TIMEOUT = 30
-PACE = float(os.environ.get("TWSE_PACE", "1.2"))
+# 證交所會對短時間內的密集請求回 307 轉址。一輪 150 個請求,
+# 間隔拉長比重跑便宜。
+PACE = float(os.environ.get("TWSE_PACE", "2.5"))
 DAYS = int(os.environ.get("CHIP_DAYS", "30"))
 
 FINMIND = "https://api.finmindtrade.com/api/v4/data"
@@ -318,7 +320,7 @@ def main():
     chips = defaultdict(lambda: defaultdict(dict))
     margin_path = None
 
-    tpex_dead = 0
+    tpex_dead = twse_dead = 0
     for d in days:
         dn = d.replace("-", "")
         inst = twse_inst(dn); time.sleep(PACE)
@@ -332,6 +334,17 @@ def main():
         # 上櫃與上市要分開數。先前把兩邊合併後只印一個總數,
         # 櫃買整整 30 天都連不上(SSL 憑證鏈不完整)也看不出來 ——
         # 上市的一千多檔把那個 0 蓋掉了。
+        # 證交所那三個也可能失敗(例如被 307 擋掉),失敗時是 FAILED 哨符,
+        # 不是 dict。先前直接對它呼叫 .update() 就炸了 ——
+        # 我把「分辨失敗」做對了,卻忘了在使用端把哨符換回空 dict。
+        if inst is FAILED:
+            twse_dead += 1
+            inst = {}
+        if marg is FAILED:
+            marg = {}
+        if val is FAILED:
+            val = {}
+
         n_tpex = 0
         if ti is FAILED or tm is FAILED:
             tpex_dead += 1
@@ -339,20 +352,27 @@ def main():
             inst.update(ti); marg.update(tm)
             n_tpex = len(ti)
 
-        for sid, v in (inst if inst is not FAILED else {}).items():
+        for sid, v in inst.items():
             chips[sid]["inst"][d] = v
-        for sid, v in (marg if marg is not FAILED else {}).items():
+        for sid, v in marg.items():
             chips[sid]["margin"][d] = v.get("margin")
             chips[sid]["short"][d] = v.get("short")
-        for sid, v in (val if val is not FAILED else {}).items():
+        for sid, v in val.items():
             chips[sid]["value"][d] = v
         print(f"  {d}  上市法人 {len(inst) - n_tpex:>5}  上櫃法人 "
               f"{'連不上' if ti is FAILED else n_tpex:>5}"
               f"  融資 {len(marg):>5}  評價 {len(val):>5}", flush=True)
 
     if tpex_dead:
-        print(f"\n⚠ 櫃買日報有 {tpex_dead}/{len(days)} 天連不上,"
-              f"上櫃個股改由 FinMind 逐檔補", flush=True)
+        print(f"\n⚠ 櫃買日報有 {tpex_dead}/{len(days)} 天連不上", flush=True)
+    if twse_dead:
+        print(f"\n⚠ 證交所有 {twse_dead}/{len(days)} 天連不上", flush=True)
+        # 證交所會用 307 轉址擋掉短時間內的密集請求。這種時候硬寫檔會用
+        # 半套資料蓋掉上一輪完整的結果 —— 那比不更新還糟。
+        if twse_dead > len(days) * 0.2:
+            print("  超過兩成,判定為被限流,不寫檔。"
+                  "請隔一段時間再跑,或調高 TWSE_PACE。", flush=True)
+            return 1
 
     # 後援:補「實際上缺的」,不是補「哪個來源掛掉」。
     #
