@@ -111,6 +111,9 @@ def fetch_prices(tickers: list[str], start: str, end: str, token: str) -> dict[s
             "volume": pd.to_numeric(raw.get("Trading_Volume"), errors="coerce"),
         }).dropna(subset=["date", "close"]).sort_values("date").reset_index(drop=True)
         df["volume"] = df["volume"].fillna(0.0)
+        # 停牌/資料異常時 FinMind 偶爾會回傳 close=0，會讓ZigZag除以零；直接剔除這種列，
+        # 不試著補值(補值等於臆測停牌期間真實價格，不誠實)。
+        df = df[df["close"] > 0].reset_index(drop=True)
         if len(df) < MIN_HISTORY:
             continue
         out[ticker] = df
@@ -145,10 +148,12 @@ def zigzag_pivots(closes: list[float], threshold: float) -> list[Pivot]:
             cand_high_price, cand_high_idx = p, i
         if p < cand_low_price:
             cand_low_price, cand_low_idx = p, i
-        if cand_high_price > closes[0] and (cand_high_price - p) / cand_high_price >= threshold:
+        if cand_high_price > closes[0] and cand_high_price > 0 and \
+                (cand_high_price - p) / cand_high_price >= threshold:
             first = Pivot("H", cand_high_idx, i, cand_high_price)
             break
-        if cand_low_price < closes[0] and (p - cand_low_price) / cand_low_price >= threshold:
+        if cand_low_price < closes[0] and cand_low_price > 0 and \
+                (p - cand_low_price) / cand_low_price >= threshold:
             first = Pivot("L", cand_low_idx, i, cand_low_price)
             break
     if first is None:
@@ -163,14 +168,14 @@ def zigzag_pivots(closes: list[float], threshold: float) -> list[Pivot]:
         if trend == 1:
             if p > extreme_price:
                 extreme_price, extreme_idx = p, i
-            elif (extreme_price - p) / extreme_price >= threshold:
+            elif extreme_price > 0 and (extreme_price - p) / extreme_price >= threshold:
                 pivots.append(Pivot("H", extreme_idx, i, extreme_price))
                 trend = -1
                 extreme_price, extreme_idx = p, i
         else:
             if p < extreme_price:
                 extreme_price, extreme_idx = p, i
-            elif (p - extreme_price) / extreme_price >= threshold:
+            elif extreme_price > 0 and (p - extreme_price) / extreme_price >= threshold:
                 pivots.append(Pivot("L", extreme_idx, i, extreme_price))
                 trend = 1
                 extreme_price, extreme_idx = p, i
