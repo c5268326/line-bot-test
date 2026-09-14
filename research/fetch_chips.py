@@ -354,24 +354,45 @@ def main():
         print(f"\n⚠ 櫃買日報有 {tpex_dead}/{len(days)} 天連不上,"
               f"上櫃個股改由 FinMind 逐檔補", flush=True)
 
-    # 櫃買連不上時的後援。只針對檢測站裡真正屬於上櫃的那幾檔,
-    # 一檔一個 request —— 檔數少,不會動到 FinMind 的小時配額。
-    if tpex_dead:
-        otc = [s_["id"] for s_ in json.load(
-            open(os.path.join(ROOT, "docs", "data", "stocks.json"), encoding="utf-8"))["stocks"]
-            if s_.get("market") == "tpex"]
-        print(f"  需要後援的上櫃個股:{otc or '無'}", flush=True)
-        for sid in otc:
-            try:
-                j = as_json(get(f"{FINMIND}?dataset=TaiwanStockInstitutionalInvestorsBuySell"
-                                f"&data_id={sid}&start_date={days[0]}&end_date={days[-1]}"))
-            except QuotaExhausted:
-                print("  FinMind 配額用盡,後援中止", flush=True)
-                break
-            except FetchFailed:
-                print(f"  {sid} FinMind 也連不上", flush=True)
-                continue
-            rows = (j or {}).get("data") or []
+    # 後援:補「實際上缺的」,不是補「哪個來源掛掉」。
+    #
+    # 先前寫成 if tpex_dead 才啟動,結果櫃買恢復之後後援就不跑了,
+    # 上櫃個股的本益比又變成 0 天 —— 因為證交所的 BWIBBU_d 只涵蓋上市,
+    # 而櫃買那邊我沒有對應的估值端點。條件掛在「誰失敗」上,
+    # 就會漏掉「沒有人負責」的那一塊。改成看每一檔到底缺什麼。
+    universe_ids = [s_["id"] for s_ in json.load(
+        open(os.path.join(ROOT, "docs", "data", "stocks.json"), encoding="utf-8"))["stocks"]]
+    # chips 是 defaultdict:用 chips[i] 檢查會把 674 檔全部建成空紀錄,
+    # 於是頁面看到「有這檔但每欄都空」,會畫出一整排破折號,
+    # 而不是「這檔沒有籌碼資料」那句說明。用 .get 讀,不要碰到就生。
+    def lacks(sid, field):
+        return not (chips.get(sid, {}) or {}).get(field)
+
+    need_inst = [i for i in universe_ids if lacks(i, "inst")]
+    need_marg = [i for i in universe_ids if lacks(i, "margin")]
+    need_val = [i for i in universe_ids if lacks(i, "value")]
+    todo = sorted(set(need_inst) | set(need_marg) | set(need_val))
+    if todo:
+        print(f"\n後援(FinMind 逐檔):法人缺 {len(need_inst)} 檔、"
+              f"融資缺 {len(need_marg)} 檔、評價缺 {len(need_val)} 檔"
+              f",共 {len(todo)} 檔要補", flush=True)
+        if len(todo) > 40:
+            # 檔數一多就不是「補缺」而是「整批重抓」,那會打爆配額。
+            # 寧可少補一些並講清楚,也不要跑到一半被擋然後留下半套資料。
+            print(f"  ⚠ 超過 40 檔,只補前 40 檔,其餘下一輪再補", flush=True)
+            todo = todo[:40]
+        for sid in todo:
+            rows = []
+            if sid in need_inst:
+                try:
+                    j = as_json(get(f"{FINMIND}?dataset=TaiwanStockInstitutionalInvestorsBuySell"
+                                    f"&data_id={sid}&start_date={days[0]}&end_date={days[-1]}"))
+                    rows = (j or {}).get("data") or []
+                except QuotaExhausted:
+                    print("  FinMind 配額用盡,後援中止", flush=True)
+                    break
+                except FetchFailed:
+                    print(f"  {sid} FinMind 法人連不上", flush=True)
             # FinMind 是每個法人別一列,要自己合併成當日淨額
             per_day = defaultdict(lambda: {"foreign": 0.0, "trust": 0.0,
                                            "dealer": 0.0, "total": 0.0})
@@ -393,6 +414,8 @@ def main():
             # 會少兩塊,而使用者看不出是「這檔沒有」還是「我沒抓到」。
             n_m = n_v = 0
             try:
+                if sid not in need_marg:
+                    raise StopIteration
                 j = as_json(get(f"{FINMIND}?dataset=TaiwanStockMarginPurchaseShortSale"
                                 f"&data_id={sid}&start_date={days[0]}&end_date={days[-1]}"))
                 for r in (j or {}).get("data") or []:
@@ -400,9 +423,13 @@ def main():
                     chips[sid]["short"][r["date"]] = num(r.get("ShortSaleTodayBalance"))
                     n_m += 1
                 time.sleep(2)
+            except StopIteration:
+                pass
             except (QuotaExhausted, FetchFailed) as e:
                 print(f"  {sid} 融資補不到:{e}", flush=True)
             try:
+                if sid not in need_val:
+                    raise StopIteration
                 j = as_json(get(f"{FINMIND}?dataset=TaiwanStockPER"
                                 f"&data_id={sid}&start_date={days[0]}&end_date={days[-1]}"))
                 for r in (j or {}).get("data") or []:
@@ -411,6 +438,8 @@ def main():
                         "yield": num(r.get("dividend_yield"))}
                     n_v += 1
                 time.sleep(2)
+            except StopIteration:
+                pass
             except (QuotaExhausted, FetchFailed) as e:
                 print(f"  {sid} 評價補不到:{e}", flush=True)
             print(f"  {sid} FinMind 補上 法人 {len(per_day)} 天、"
