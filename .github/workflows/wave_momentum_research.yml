@@ -12,6 +12,13 @@ on:
         description: "最多抓幾檔股票"
         required: false
         default: "500"
+  # workflow_dispatch 在這個分支尚未合併進 main 前無法用 API 觸發(GitHub限制：
+  # 手動觸發的workflow必須先存在於default branch才能被dispatch API找到)。改用
+  # push 事件觸發，這個限制不適用於push——只要這個檔案本身有變動就會自動跑一次，
+  # 用來在合併前就能借用有網路權限的runner執行一次性研究腳本。
+  push:
+    branches: ["claude/taiwan-stock-valuation-backtest-assutt"]
+    paths: [".github/workflows/wave_momentum_research.yml"]
 
 jobs:
   research:
