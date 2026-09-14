@@ -37,6 +37,10 @@ import update_quotes as U   # noqa: E402  沿用同一個快照與欄位對應
 
 DEST = U.DEST
 COVERAGE_MIN = 0.60        # 覆蓋率低於鄰近日期的六成就當成洞
+# 序列最前端只有一兩檔有資料(上市較早的個股),分母太小,比例沒有意義:
+# 2025-06-06 就是這樣被判成洞的 —— 當天 2 檔裡有 1 檔沒有,50% 就低於門檻。
+# 少於這個檔數的日期不做判斷,免得白跑一次抓取又發出假警報。
+MIN_ELIGIBLE = 30
 
 
 def main():
@@ -56,11 +60,15 @@ def main():
         got = sum(1 for sid in have if d in have[sid])
         cover[d] = (got, elig, got / elig if elig else 0)
 
-    typical = sorted(c[2] for c in cover.values())
+    judged = [d for d in dates if cover[d][1] >= MIN_ELIGIBLE]
+    typical = sorted(cover[d][2] for d in judged)
     med = typical[len(typical) // 2] if typical else 0
-    holes = [d for d in dates if cover[d][2] < med * COVERAGE_MIN]
+    holes = [d for d in judged if cover[d][2] < med * COVERAGE_MIN]
+    skipped = len(dates) - len(judged)
 
-    print(f"交易日 {len(dates)} 天,覆蓋率中位數 {med*100:.1f}%")
+    print(f"交易日 {len(dates)} 天,覆蓋率中位數 {med*100:.1f}%"
+          + (f"(序列最前端 {skipped} 天已上市檔數不足 {MIN_ELIGIBLE},不判斷)"
+             if skipped else ""))
     if not holes:
         print("沒有整天缺漏的交易日,不需要修補")
         return 0
