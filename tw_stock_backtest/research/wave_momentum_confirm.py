@@ -14,7 +14,9 @@ RESEARCH.md，本機沙盒（網路出口被政策封鎖，見 RESEARCH.md「已
   的確認日觸發，代表五浪完成、預期修正。
 - momentum_12_1：跟 factors.py 相同定義（skip 21、lookback 252 個交易日），在訊號確認日
   當天取值（因果、不偷看未來）。
-- 動能確認門檻只用訓練期(confirm date <= 2019-12-31)挑選（避免用測試期結果回頭選門檻），
+- volume_ratio：訊號確認日當天成交量 / 過去20個交易日均量（不含當天），當作「帶量確認」
+  的門檻，三種都測：只看動能、只看成交量、動能+成交量雙重確認。
+- 確認門檻只用訓練期(confirm date <= 2019-12-31)挑選（避免用測試期結果回頭選門檻），
   再誠實報驗證期(2020-01-01~2022-12-31)、測試期(>2022-12-31)的樣本外表現。
 - 公平基準：同一個「訊號可能出現的股票池 + 日期範圍」內，隨機 (股票,日期) 進場的勝率，
   按同樣的訓練/驗證/測試切法分開算，不是拿全市場或未過濾的基準來比。
@@ -36,6 +38,7 @@ FINMIND_URL = "https://api.finmindtrade.com/api/v4/data"
 MOMENTUM_SKIP = 21
 MOMENTUM_LOOKBACK = 252
 FORWARD_DAYS = 63
+VOLUME_WINDOW = 20  # 成交量確認：當天量 / 過去20個交易日均量（不含當天，避免自己污染基準）
 MIN_HISTORY = MOMENTUM_SKIP + MOMENTUM_LOOKBACK + FORWARD_DAYS + 10
 
 TRAIN_END = pd.Timestamp("2019-12-31")
@@ -105,7 +108,9 @@ def fetch_prices(tickers: list[str], start: str, end: str, token: str) -> dict[s
         df = pd.DataFrame({
             "date": pd.to_datetime(raw["date"]),
             "close": pd.to_numeric(raw["close"], errors="coerce"),
-        }).dropna().sort_values("date").reset_index(drop=True)
+            "volume": pd.to_numeric(raw.get("Trading_Volume"), errors="coerce"),
+        }).dropna(subset=["date", "close"]).sort_values("date").reset_index(drop=True)
+        df["volume"] = df["volume"].fillna(0.0)
         if len(df) < MIN_HISTORY:
             continue
         out[ticker] = df
@@ -222,6 +227,17 @@ def momentum_at(closes: list[float], idx: int) -> float | None:
     return closes[j] / closes[k] - 1
 
 
+def volume_ratio_at(volumes: list[float], idx: int, window: int = VOLUME_WINDOW) -> float | None:
+    """當天成交量 / 過去window個交易日均量（不含當天）。用來當「帶量確認」的門檻。"""
+    if idx - window < 0:
+        return None
+    baseline = volumes[idx - window:idx]
+    avg = sum(baseline) / len(baseline) if baseline else 0.0
+    if avg <= 0:
+        return None
+    return volumes[idx] / avg
+
+
 def forward_return(closes: list[float], idx: int) -> float | None:
     if idx + FORWARD_DAYS >= len(closes):
         return None
@@ -245,6 +261,38 @@ def win_rate(rows: list[float]) -> tuple[float, int]:
     return wins / len(rows), len(rows)
 
 
+def evaluate_cutoffs(rows: list[tuple], predicate, cutoffs: list[float],
+                      baseline_summary: dict, cutoff_field_name: str,
+                      min_n: int = 30) -> tuple[list[dict], dict | None]:
+    """rows: (split, *keys, fwd_ret) 的 list；predicate(row_keys, cutoff) -> bool 決定該筆
+    是否通過門檻。回傳每個門檻的三段勝率/超額，以及「只用訓練期表現挑出的最佳門檻」。
+    """
+    results = []
+    for cutoff in cutoffs:
+        by_split: dict[str, list[float]] = {"train": [], "val": [], "test": []}
+        for row in rows:
+            split, fwd = row[0], row[-1]
+            keys = row[1:-1]
+            if predicate(keys, cutoff):
+                by_split[split].append(fwd)
+        per_split = {}
+        for split in ("train", "val", "test"):
+            wr, n = win_rate(by_split[split])
+            base_wr = baseline_summary[split]["win_rate"]
+            excess = (wr - base_wr) if n and base_wr == base_wr else float("nan")
+            per_split[split] = {"win_rate": wr, "n": n, "baseline_win_rate": base_wr,
+                                 "excess_pp": excess * 100 if excess == excess else None}
+        results.append({cutoff_field_name: cutoff, "splits": per_split})
+        p = per_split
+        print(f"  {cutoff_field_name}>{cutoff:>7.2f}: train {p['train']['win_rate']:.1%}"
+              f"(n={p['train']['n']}) | val {p['val']['win_rate']:.1%}(n={p['val']['n']}) | "
+              f"test {p['test']['win_rate']:.1%}(n={p['test']['n']})")
+
+    eligible = [c for c in results if c["splits"]["train"]["n"] >= min_n]
+    best = max(eligible, key=lambda c: c["splits"]["train"]["win_rate"]) if eligible else None
+    return results, best
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--token", default=os.environ.get("FINMIND_TOKEN", ""))
@@ -253,13 +301,15 @@ def main() -> None:
     parser.add_argument("--max-tickers", type=int, default=500)
     parser.add_argument("--thresholds", default="0.05,0.08,0.12")
     parser.add_argument("--momentum-cutoffs", default="-999,0.0,0.10,0.20,0.30")
+    parser.add_argument("--volume-cutoffs", default="-999,1.0,1.5,2.0,3.0")
     parser.add_argument("--out", default="wave_momentum_report.json")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     random.seed(args.seed)
     thresholds = [float(x) for x in args.thresholds.split(",")]
-    cutoffs = [float(x) for x in args.momentum_cutoffs.split(",")]
+    mom_cutoffs = [float(x) for x in args.momentum_cutoffs.split(",")]
+    vol_cutoffs = [float(x) for x in args.volume_cutoffs.split(",")]
 
     print(f"抓股票池（上限 {args.max_tickers} 檔）...")
     tickers = fetch_universe(args.token, args.max_tickers)
@@ -273,22 +323,24 @@ def main() -> None:
 
     for threshold in thresholds:
         print(f"\n=== ZigZag threshold={threshold:.0%} ===")
-        abc_rows = []   # (split, momentum, fwd_ret)
+        abc_rows = []   # (split, momentum, volume_ratio, fwd_ret)
         baseline_rows = []  # (split, fwd_ret) —— 隨機(股票,日期)基準，同一股票池/期間
 
         for ticker, df in price_data.items():
             dates = df["date"].tolist()
             closes = df["close"].tolist()
+            volumes = df["volume"].tolist()
             pivots = zigzag_pivots(closes, threshold)
 
             for sig in abc_done_signals(pivots):
                 idx = sig.confirm_idx
                 mom = momentum_at(closes, idx)
+                vol = volume_ratio_at(volumes, idx)
                 fwd = forward_return(closes, idx)
-                if mom is None or fwd is None:
+                if mom is None or vol is None or fwd is None:
                     continue
                 split = split_label(dates[idx])
-                abc_rows.append((split, mom, fwd))
+                abc_rows.append((split, mom, vol, fwd))
 
             # 基準母體：這檔股票所有「momentum/前瞻報酬都算得出來」的日期，
             # 每 5 個交易日抽一個當候選，避免母體過度膨脹又維持覆蓋率。
@@ -310,43 +362,48 @@ def main() -> None:
             wr, n = win_rate(sample)
             baseline_summary[split] = {"win_rate": wr, "n": n}
 
-        cutoff_results = []
-        for cutoff in cutoffs:
-            by_split: dict[str, list[float]] = {"train": [], "val": [], "test": []}
-            for split, mom, fwd in abc_rows:
-                if mom > cutoff:
-                    by_split[split].append(fwd)
-            per_split = {}
-            for split in ("train", "val", "test"):
-                wr, n = win_rate(by_split[split])
-                base_wr = baseline_summary[split]["win_rate"]
-                excess = (wr - base_wr) if n and base_wr == base_wr else float("nan")
-                per_split[split] = {"win_rate": wr, "n": n, "baseline_win_rate": base_wr,
-                                     "excess_pp": excess * 100 if excess == excess else None}
-            cutoff_results.append({"momentum_cutoff": cutoff, "splits": per_split})
-            train_wr = per_split["train"]["win_rate"]
-            train_n = per_split["train"]["n"]
-            val_wr = per_split["val"]["win_rate"]
-            val_n = per_split["val"]["n"]
-            test_wr = per_split["test"]["win_rate"]
-            test_n = per_split["test"]["n"]
-            print(f"  momentum>{cutoff:>7.2f}: train {train_wr:.1%}(n={train_n}) | "
-                  f"val {val_wr:.1%}(n={val_n}) | test {test_wr:.1%}(n={test_n})")
+        print(" -- 只看動能確認 --")
+        mom_rows = [(split, mom, fwd) for split, mom, vol, fwd in abc_rows]
+        mom_results, mom_best = evaluate_cutoffs(
+            mom_rows, lambda keys, c: keys[0] > c, mom_cutoffs, baseline_summary, "momentum_cutoff")
 
-        # 用訓練期表現挑最佳門檻（n>=30才考慮，避免小樣本雜訊），再誠實報驗證/測試期表現，
-        # 不能用測試期結果回頭選門檻。
-        eligible = [c for c in cutoff_results if c["splits"]["train"]["n"] >= 30]
-        best = max(eligible, key=lambda c: c["splits"]["train"]["win_rate"]) if eligible else None
+        print(" -- 只看成交量確認(當天量/20日均量) --")
+        vol_rows = [(split, vol, fwd) for split, mom, vol, fwd in abc_rows]
+        vol_results, vol_best = evaluate_cutoffs(
+            vol_rows, lambda keys, c: keys[0] > c, vol_cutoffs, baseline_summary, "volume_cutoff")
+
+        combined_results = None
+        combined_best = None
+        if mom_best is not None:
+            best_mom_cutoff = mom_best["momentum_cutoff"]
+            print(f" -- 動能({best_mom_cutoff:.2f}，訓練期選出) + 成交量雙重確認 --")
+            combined_rows = [(split, mom, vol, fwd) for split, mom, vol, fwd in abc_rows
+                              if mom > best_mom_cutoff]
+            combined_results, combined_best = evaluate_cutoffs(
+                combined_rows, lambda keys, c: keys[1] > c, vol_cutoffs, baseline_summary,
+                "volume_cutoff")
 
         report["thresholds"][f"{threshold:.2f}"] = {
             "baseline": baseline_summary,
-            "cutoff_results": cutoff_results,
-            "selected_by_train": best,
+            "momentum_only": {"cutoff_results": mom_results, "selected_by_train": mom_best},
+            "volume_only": {"cutoff_results": vol_results, "selected_by_train": vol_best},
+            "momentum_and_volume": {
+                "momentum_cutoff": mom_best["momentum_cutoff"] if mom_best else None,
+                "cutoff_results": combined_results, "selected_by_train": combined_best,
+            },
         }
-        if best:
-            print(f"  → 訓練期選出的最佳門檻: momentum>{best['momentum_cutoff']:.2f}，"
-                  f"樣本外表現 val={best['splits']['val']['win_rate']:.1%} "
-                  f"test={best['splits']['test']['win_rate']:.1%}")
+        if mom_best:
+            print(f"  → 動能單獨最佳門檻 momentum>{mom_best['momentum_cutoff']:.2f}，"
+                  f"樣本外 val={mom_best['splits']['val']['win_rate']:.1%} "
+                  f"test={mom_best['splits']['test']['win_rate']:.1%}")
+        if vol_best:
+            print(f"  → 成交量單獨最佳門檻 volume>{vol_best['volume_cutoff']:.2f}倍，"
+                  f"樣本外 val={vol_best['splits']['val']['win_rate']:.1%} "
+                  f"test={vol_best['splits']['test']['win_rate']:.1%}")
+        if combined_best:
+            print(f"  → 動能+成交量雙重確認最佳門檻 volume>{combined_best['volume_cutoff']:.2f}倍，"
+                  f"樣本外 val={combined_best['splits']['val']['win_rate']:.1%} "
+                  f"test={combined_best['splits']['test']['win_rate']:.1%}")
 
     with open(args.out, "w", encoding="utf-8") as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
