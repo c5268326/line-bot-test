@@ -18,7 +18,9 @@ on:
   # 用來在合併前就能借用有網路權限的runner執行一次性研究腳本。
   push:
     branches: ["claude/taiwan-stock-valuation-backtest-assutt"]
-    paths: [".github/workflows/wave_momentum_research.yml"]
+    paths:
+      - ".github/workflows/wave_momentum_research.yml"
+      - "tw_stock_backtest/research/wave_momentum_confirm.py"
 
 jobs:
   research:

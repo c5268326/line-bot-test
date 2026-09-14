@@ -68,15 +68,27 @@ def _finmind_request(dataset: str, data_id: str | None, start: str, end: str,
 
 
 def fetch_universe(token: str, max_tickers: int) -> list[str]:
-    """抓 TWSE 全上市普通股清單（4碼數字代號，排除ETF/存託憑證/特別股等）。"""
-    info = _finmind_request("TaiwanStockInfo", None, "2010-01-01", "2010-01-01", token, interval=0.5)
+    """抓 TWSE 全上市普通股清單（4碼數字代號，排除ETF/存託憑證/特別股等）。
+
+    TaiwanStockInfo 是快照型資料集，start_date/end_date 若給同一天，FinMind可能因為內部
+    用date欄位做區間篩選而回傳空集合；改用寬區間確保抓到完整清單。
+    """
+    info = _finmind_request("TaiwanStockInfo", None, "2000-01-01",
+                             pd.Timestamp.today().strftime("%Y-%m-%d"), token, interval=0.5)
     if info.empty:
         raise RuntimeError("TaiwanStockInfo 回傳空資料，無法建立股票池")
+    print(f"  TaiwanStockInfo 原始筆數: {len(info)}, 欄位: {list(info.columns)}")
+    if "type" not in info.columns or "stock_id" not in info.columns:
+        raise RuntimeError(f"TaiwanStockInfo 欄位跟預期不符: {list(info.columns)}")
     info = info[info["type"] == "twse"]
     info = info[info["stock_id"].str.fullmatch(r"\d{4}")]
     exclude_kw = ("ETF", "存託憑證", "特別股", "ETN")
-    info = info[~info["industry_category"].fillna("").str.contains("|".join(exclude_kw))]
+    if "industry_category" in info.columns:
+        info = info[~info["industry_category"].fillna("").str.contains("|".join(exclude_kw))]
     tickers = sorted(info["stock_id"].unique().tolist())
+    print(f"  篩選後股票池大小: {len(tickers)}")
+    if not tickers:
+        raise RuntimeError("篩選後股票池為空，請檢查 type/stock_id/industry_category 篩選條件")
     return tickers[:max_tickers]
 
 
