@@ -312,6 +312,18 @@ table.scan tbody tr:last-child td { border-bottom: none; }
 .c-boll { stroke: var(--ink-deco); fill: none; stroke-width: 1; stroke-dasharray: 3 3; }
 .c-boll-fill { fill: var(--ink-deco); opacity: .12; }
 .c-ref { stroke: var(--rule-strong); stroke-width: 1; stroke-dasharray: 2 3; }
+/* 波浪疊圖:ZigZag 用淡線當底,被採用的數法用實線 + 編號。
+   進行中的那一段畫虛線 —— 它的終點是現在的價格,還沒走完。
+
+   顏色用近黑而不是調色盤裡的任何一條均線色:第一版用了 --ma-slow,
+   結果波浪線和 MA60 同色,圖上分不出哪條是哪條。波浪是「註記」,
+   不是又一條指標線,用文字色才讀得出層次。 */
+.c-zz { stroke: var(--ink-deco); fill: none; stroke-width: 1; opacity: .5; }
+.c-wave { stroke: var(--ink); fill: none; stroke-width: 1.6; stroke-linejoin: round; opacity: .85; }
+.c-wave-run { stroke-dasharray: 4 3; opacity: .6; }
+.c-wave-dot { fill: var(--ink); }
+.c-wave-lbl { fill: var(--ink); font-family: var(--mono); font-size: 11px; font-weight: 700;
+  paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
 .c-cross { stroke: var(--live); stroke-width: 1; pointer-events: none; }
 .c-crossdot { fill: var(--live); pointer-events: none; }
 .c-hit { fill: transparent; }
@@ -660,6 +672,7 @@ table.bt tr.is-bench td:first-child { font-weight: 700; }
         <button class="toggle" data-panel="rsi">RSI</button>
         <button class="toggle" data-panel="macd">MACD</button>
         <button class="toggle" data-panel="kd">KD</button>
+        <button class="toggle" data-panel="wave">WAVE</button>
       </div>
     </div>
 
@@ -924,7 +937,8 @@ const state = {
   view: "scan",
   selected: null,
   range: 120,
-  panels: { boll: false, vol: true, rsi: true, macd: true, kd: true },
+  // wave 預設開:使用者問「波浪能不能畫出來」,那它就該一進來就看得到。
+  panels: { boll: false, wave: true, vol: true, rsi: true, macd: true, kd: true },
   sort: { key: "score", dir: -1 },
   filter: "all",
   query: "",
@@ -1519,7 +1533,8 @@ function waveCount(bars) {
   const build = (pts, label, waveNo, dirUp, rules) => ({
     label, waveNo, up: dirUp, rules,
     ok: rules.every(r => r.ok),
-    pts: pts.map(x => ({ d: bars[x.i].d, p: x.p, t: x.t })),
+    // 保留 i:清單只需要日期,但畫在圖上要知道是第幾根 K 棒
+    pts: pts.map(x => ({ i: x.i, d: bars[x.i].d, p: x.p, t: x.t })),
   });
 
   // 情境一:最後 6 個轉折構成完整 5 波,目前在其後的修正
@@ -1560,7 +1575,7 @@ function waveCount(bars) {
       ];
       out.candidates.push({ label: up ? "上升推動" : "下跌推動", waveNo: "第 4 波修正中",
                             up, rules, ok: rules.every(r => r.ok),
-                            pts: seq.map(x => ({ d: bars[x.i] ? bars[x.i].d : bars[bars.length - 1].d, p: x.p, t: x.t })) });
+                            pts: seq.map(x => ({ i: x.i, d: bars[x.i] ? bars[x.i].d : bars[bars.length - 1].d, p: x.p, t: x.t })) });
     }
   }
   // 情境四:最後 3 個轉折 + 目前價格 = 進行中的第 3 波
@@ -1578,7 +1593,7 @@ function waveCount(bars) {
       ];
       const c = { label: up ? "上升推動" : "下跌推動", waveNo: "第 3 波進行中",
                   up, rules, ok: rules.every(r => r.ok),
-                  pts: seq.map(x => ({ d: bars[x.i] ? bars[x.i].d : bars[bars.length - 1].d, p: x.p, t: x.t })) };
+                  pts: seq.map(x => ({ i: x.i, d: bars[x.i] ? bars[x.i].d : bars[bars.length - 1].d, p: x.p, t: x.t })) };
       c.fib = { ratio: w1 > 0 ? w3 / w1 : null, w1, w3 };
       out.candidates.push(c);
     }
@@ -2232,6 +2247,62 @@ function renderChart() {
       s += `<path class="c-ma-slow" d="${linePath(ind.maSlow, y)}"/>`;
       s += `<path class="c-ma-mid" d="${linePath(ind.maMid, y)}"/>`;
       s += `<path class="c-ma-fast" d="${linePath(ind.maFast, y)}"/>`;
+      // ---- 波浪結構疊圖 ----
+      if (state.panels.wave) {
+        const w = waveCount(body);
+        const conf = w.pivots.filter(v => !v.tentative);
+
+        // 底層:整段 ZigZag,淡的。讓人看見轉折是怎麼被機械式挑出來的,
+        // 而不是只看到最後那幾個被標上編號的點。
+        let zz = "";
+        for (const v of conf) {
+          if (v.i < i0 || v.i > i1) continue;
+          zz += `${zz ? "L" : "M"}${x(v.i).toFixed(1)} ${y(v.p).toFixed(1)} `;
+        }
+        if (zz) s += `<path class="c-zz" d="${zz}"/>`;
+
+        // 上層:第一個「未被規則排除」的數法。被排除的不畫 ——
+        // 圖上同時疊三種數法只會變成一團線,那比不畫更糟。
+        const cand = w.candidates.find(c => c.ok);
+        if (cand && cand.pts.length >= 2) {
+          // 每一種候選的 pts 都是「推動段」的轉折,一律標 0~5。
+          // 先前對「修正段(ABC)」改標 A/B/C 是錯的:那六個點是已經走完的
+          // 推動五波,ABC 是接下來要走、圖上還沒有的東西 —— 標在舊點上
+          // 等於把還沒發生的事畫成已經發生。
+          const lbl = ["0", "1", "2", "3", "4", "5"];
+          let d = "", dash = "";
+          const pts = cand.pts;
+          for (let k = 0; k < pts.length; k++) {
+            const q = pts[k];
+            const seg = `${x(q.i).toFixed(1)} ${y(q.p).toFixed(1)}`;
+            // 最後一段的終點是「現在的價格」,那一段還沒走完,畫虛線
+            const running = k === pts.length - 1 && q.i === body.length - 1
+                            && /進行中|修正中/.test(cand.waveNo);
+            if (k === 0) d += `M${seg} `;
+            else if (running) { dash = `M${x(pts[k-1].i).toFixed(1)} ${y(pts[k-1].p).toFixed(1)} L${seg}`; }
+            else d += `L${seg} `;
+          }
+          if (d.trim() !== "" && d.indexOf("L") >= 0) s += `<path class="c-wave" d="${d}"/>`;
+          if (dash) s += `<path class="c-wave c-wave-run" d="${dash}"/>`;
+
+          for (let k = 0; k < pts.length; k++) {
+            const q = pts[k];
+            if (q.i < i0 || q.i > i1) continue;
+            const cx = x(q.i), cy = y(q.p);
+            // 標號放在轉折的外側:高點往上、低點往下,才不會蓋到 K 棒
+            const up = q.t === "H";
+            s += `<circle class="c-wave-dot" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.6"/>`;
+            const t = lbl[k] != null ? lbl[k] : "";
+            if (t !== "") {
+              s += `<text class="c-wave-lbl" x="${cx.toFixed(1)}" y="${(cy + (up ? -8 : 15)).toFixed(1)}"`
+                 + ` text-anchor="middle">${t}</text>`;
+            }
+          }
+        }
+        const note = cand ? cand.waveNo : (w.candidates.length ? "所有數法都被規則排除" : "判讀不出結構");
+        s += `<text class="c-lbl" x="${padL + 4}" y="${p.top + 27}">Wave · ${esc(note)}</text>`;
+      }
+
       s += `<text class="c-lbl" x="${padL + 4}" y="${p.top + 13}">Price · MA</text>`;
 
       // 被點選的訊號:在價格面板標一個記號
@@ -2389,6 +2460,11 @@ function renderLegend() {
   const p = state.params;
   const items = [[`MA${p.maFast}`, "var(--ma-fast)"], [`MA${p.maMid}`, "var(--ma-mid)"], [`MA${p.maSlow}`, "var(--ma-slow)"]];
   if (state.panels.boll) items.push(["布林 ±2σ", "var(--ink-deco)"]);
+  if (state.panels.wave) {
+    items.push(["ZigZag 全部轉折", "var(--ink-deco)"],
+               ["採用的數法 0~5", "var(--ink)"],
+               ["虛線:這一段還沒走完", "var(--ink-faint)"]);
+  }
   items.push(["上漲 / 多方", "var(--up)"], ["下跌 / 空方", "var(--down)"]);
   document.getElementById("legendrow").innerHTML =
     items.map(([t, c]) => `<span class="lg"><i style="background:${c}"></i>${esc(t)}</span>`).join("") +
