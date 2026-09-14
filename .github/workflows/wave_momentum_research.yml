@@ -1,0 +1,59 @@
+name: 【暫時】波浪理論+動能確認研究
+
+# 一次性研究用途：跑 tw_stock_backtest/research/wave_momentum_confirm.py，
+# 結果供 Claude session 讀回去寫進 RESEARCH.md 後，這個 workflow 與對應腳本會一併移除。
+# 本機沙盒網路出口被政策封鎖，無法直接抓 FinMind 真實資料，所以借用有網路權限的
+# GitHub-hosted runner 執行。
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_tickers:
+        description: "最多抓幾檔股票"
+        required: false
+        default: "500"
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 取得程式碼
+        uses: actions/checkout@v4
+
+      - name: 設定 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: tw_stock_backtest/requirements.txt
+
+      - name: 安裝套件
+        run: pip install -r tw_stock_backtest/requirements.txt
+
+      - name: 執行研究腳本
+        env:
+          FINMIND_TOKEN: ${{ secrets.FINMIND_TOKEN }}
+        run: |
+          python -m tw_stock_backtest.research.wave_momentum_confirm \
+            --max-tickers "${{ github.event.inputs.max_tickers || '500' }}" \
+            --out wave_momentum_report.json
+
+      - name: 寫入 Job Summary
+        if: always()
+        run: |
+          echo "### 波浪理論+動能確認研究結果" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f wave_momentum_report.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat wave_momentum_report.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "腳本未產生報告檔，請查看上方 log。" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: 上傳報告 artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wave-momentum-report
+          path: wave_momentum_report.json
+          if-no-files-found: warn
