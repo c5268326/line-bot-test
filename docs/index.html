@@ -1322,7 +1322,11 @@ function chipSeries(code, dates, n = 10) {
     const v = rows.map(r => r[k]).filter(x => x != null);
     return v.length ? v.reduce((a, b) => a + b, 0) : null;
   };
-  const marg = rows.map(r => r.margin).filter(x => x != null);
+  // 融資餘額的公布時間比法人買賣超晚。當天收盤後跑,常常只有法人有、
+  // 融資還沒出來 —— 那時最後一筆融資是前一天的。把它的日期一起帶出去,
+  // 不然畫面上會出現「9/16 的外資」配「9/15 的融資」而看不出來。
+  const margRows = rows.filter(r => r.margin != null);
+  const marg = margRows.map(r => r.margin);
   const allDays = chips.data.dates || [];
   const allForeign = allDays.map(d => {
     const i = c.inst && c.inst[d];
@@ -1336,6 +1340,9 @@ function chipSeries(code, dates, n = 10) {
     cumDays: allForeign.length,
     marginFirst: marg.length ? marg[0] : null,
     marginLast: marg.length ? marg[marg.length - 1] : null,
+    marginDate: margRows.length ? margRows[margRows.length - 1].d : null,
+    marginStale: margRows.length
+      ? margRows[margRows.length - 1].d !== rows[rows.length - 1].d : false,
     value: (c.value && c.value[days[days.length - 1]]) || null,
   };
 }
@@ -2625,8 +2632,11 @@ function renderReport() {
   }
   if (f.chip && f.chip.marginLast != null) {
     const ch = f.chip.marginFirst ? f.chip.marginLast / f.chip.marginFirst - 1 : null;
-    cards.push(["融資餘額", nf(f.chip.marginLast, 0) + " 張",
-      ch != null ? `期間${ch >= 0 ? "增" : "減"} ${nf(Math.abs(ch) * 100, 1)}%` : "", "note"]);
+    const chg = ch != null ? `期間${ch >= 0 ? "增" : "減"} ${nf(Math.abs(ch) * 100, 1)}%` : "";
+    // 融資比其他欄位晚公布。日期不同就標出來,不要讓人以為是同一天的。
+    cards.push([f.chip.marginStale ? `融資餘額(${f.chip.marginDate.slice(5)})` : "融資餘額",
+      nf(f.chip.marginLast, 0) + " 張",
+      f.chip.marginStale ? `${chg}・當日尚未公布` : chg, "note"]);
   }
   if (f.chip && f.chip.value && f.chip.value.per != null) {
     const v = f.chip.value;
