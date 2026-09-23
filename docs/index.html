@@ -1343,7 +1343,16 @@ function chipSeries(code, dates, n = 10) {
     marginDate: margRows.length ? margRows[margRows.length - 1].d : null,
     marginStale: margRows.length
       ? margRows[margRows.length - 1].d !== rows[rows.length - 1].d : false,
-    value: (c.value && c.value[days[days.length - 1]]) || null,
+    // 本益比和融資一樣比法人晚公布。只看最後一天的話,收盤後馬上跑就會
+    // 整張卡片消失 —— 那讓人以為「這檔沒有估值」,而不是「今天還沒出來」。
+    // 往回找最近一筆,並把日期帶出去。
+    value: (() => {
+      for (let k = days.length - 1; k >= 0; k--) {
+        const v = c.value && c.value[days[k]];
+        if (v && v.per != null) return { ...v, d: days[k], stale: k !== days.length - 1 };
+      }
+      return null;
+    })(),
   };
 }
 
@@ -2640,8 +2649,10 @@ function renderReport() {
   }
   if (f.chip && f.chip.value && f.chip.value.per != null) {
     const v = f.chip.value;
-    cards.push(["本益比 / 淨值比", `${nf(v.per, 1)} / ${nf(v.pbr, 2)}`,
-      v["yield"] != null ? `殖利率 ${nf(v["yield"], 2)}%` : "", "note"]);
+    const y = v["yield"] != null ? `殖利率 ${nf(v["yield"], 2)}%` : "";
+    cards.push([v.stale ? `本益比 / 淨值比(${v.d.slice(5)})` : "本益比 / 淨值比",
+      `${nf(v.per, 1)} / ${nf(v.pbr, 2)}`,
+      v.stale ? `${y}${y ? "・" : ""}當日尚未公布` : y, "note"]);
   }
   document.getElementById("report-cards").innerHTML = cards.map(([k, v, s, t]) =>
     `<div class="rp-card"><div class="lbl">${esc(k)}</div>
