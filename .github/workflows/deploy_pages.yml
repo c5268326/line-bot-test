@@ -44,7 +44,18 @@ jobs:
 
     steps:
       - name: 取得程式碼
+        # 不指定 ref:workflow_dispatch 會取觸發時選的那個分支。
+        # 這是刻意的 —— 資料更新都在功能分支上,main 停在 9/10,
+        # 從 main 部署會把兩週前的版本推上線。
         uses: actions/checkout@v4
+
+      - name: 確認要部署的內容是新的
+        run: |
+          echo "分支: ${GITHUB_REF_NAME}"
+          python3 -c "import json; d=json.load(open('docs/data/stocks.json')); c=json.load(open('docs/data/chips.json')); print('行情最新', d['dates'][-1], len(d['dates']), '天', len(d['stocks']), '檔'); print('籌碼最新', c['dates'][-1], len(c['stocks']), '檔')"
+          test -f docs/robots.txt || { echo "缺 robots.txt,不部署"; exit 1; }
+          grep -q 'name="robots" content="noindex' docs/index.html || { echo "index.html 沒有 noindex,不部署"; exit 1; }
+          echo "noindex 與 robots.txt 都在"
 
       - name: 設定 Pages(尚未啟用時自動啟用)
         uses: actions/configure-pages@v5
