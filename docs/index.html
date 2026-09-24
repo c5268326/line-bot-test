@@ -144,6 +144,20 @@ body {
 }
 .btn-icon:hover { color: var(--up); background: var(--up-soft); }
 
+/* ===== 資料鮮度 ===== */
+.freshness { display: flex; flex-wrap: wrap; gap: 1px; background: var(--rule);
+  border: 1px solid var(--rule); margin-bottom: 14px; }
+.fr { background: var(--surface); padding: 8px 14px; flex: 1 1 auto; min-width: 150px; }
+.fr-k { font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-faint); font-weight: 500; }
+.fr-v { font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 13px; font-weight: 600; margin-top: 2px; }
+.fr-s { font-size: 11px; color: var(--ink-faint); margin-top: 1px; }
+/* 落後於行情日期的那幾格要看得出來,不然又變成「看起來都一樣新」 */
+.fr.is-stale { border-left: 3px solid var(--ma-mid); }
+.fr.is-stale .fr-v { color: #7A5A0B; }
+.fr.is-partial .fr-s { color: #7A5A0B; font-weight: 500; }
+
 /* ================= 分頁 ================= */
 .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--rule); margin-bottom: 18px; }
 .tabs button {
@@ -605,6 +619,12 @@ table.bt tr.is-bench td:first-child { font-weight: 700; }
       <button class="btn btn-primary" id="btn-import">載入資料</button>
     </div>
   </header>
+
+  <!-- 資料鮮度:四份資料各自的日期與涵蓋率。
+       先前只有狀態列一句「收盤資料至 X」,那對行情是真的,但財報與回測
+       是另外兩份、日期不同、涵蓋率也不同 —— 一個日期蓋住四份資料,
+       整頁就看起來都是最新的。每份自己報自己的。 -->
+  <div class="freshness" id="freshness"></div>
 
   <nav class="tabs" id="tabs">
     <button data-view="scan" class="is-active">檢測站</button>
@@ -2088,6 +2108,44 @@ function renderStats() {
   document.getElementById("sb-date").textContent = latest ? latest.replace(/-/g, "/") : "—";
 }
 
+/* 四份資料各自的日期與涵蓋率。哪一份落後、哪一份只抓了一部分,
+   要在使用者相信它之前就先講。 */
+async function renderFreshness() {
+  const host = document.getElementById("freshness");
+  if (!host) return;
+  const [fu, ch] = [await loadFundamentals(), await loadChips()];
+  const bt = await loadBacktest();
+  const total = state.datasets.filter(d => d.code).length;
+  const asOf = (state.feed && state.feed.asOf) || null;
+
+  const rows = [];
+  rows.push({ k: "行情", v: asOf || "—", s: `${total} 檔日線`, d: asOf });
+  if (ch && ch.dates && ch.dates.length) {
+    const n = Object.keys(ch.stocks || {}).length;
+    rows.push({ k: "籌碼", v: ch.dates[ch.dates.length - 1],
+                s: `${n} 檔 ・ 法人/融資/評價`, d: ch.dates[ch.dates.length - 1] });
+  }
+  if (fu && fu.stocks) {
+    const n = Object.keys(fu.stocks).length;
+    rows.push({ k: "財報", v: (fu.updated_at || "").slice(0, 10) || "—",
+                s: `${n} / ${total} 檔`, d: (fu.updated_at || "").slice(0, 10),
+                partial: n < total });
+  }
+  if (bt && bt.config && bt.config.end) {
+    rows.push({ k: "回測", v: bt.config.end,
+                s: `${bt.config.start} 起 ・ ${bt.config.universe_mode || ""}`.trim(),
+                d: bt.config.end });
+  }
+
+  host.innerHTML = rows.map(r => {
+    const stale = asOf && r.d && r.d < asOf;
+    const cls = [stale ? "is-stale" : "", r.partial ? "is-partial" : ""].filter(Boolean).join(" ");
+    const note = r.partial ? `${r.s} ・ 其餘尚未抓取` : r.s;
+    return `<div class="fr ${cls}"><div class="fr-k">${esc(r.k)}</div>
+      <div class="fr-v">${esc(r.v)}</div><div class="fr-s">${esc(note)}</div></div>`;
+  }).join("");
+}
+
 function renderStatusSource() {
   const dot = document.getElementById("sb-dot");
   const txt = document.getElementById("sb-source");
@@ -2902,6 +2960,7 @@ function render() {
   document.getElementById("view-research").hidden = state.view !== "research";
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("is-active", b.dataset.view === state.view));
   renderStatusSource();
+  renderFreshness();
   if (state.view === "scan") renderScan();
   else if (state.view === "research") renderResearch();
   else renderDetail();
