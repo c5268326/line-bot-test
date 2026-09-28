@@ -42,6 +42,11 @@ OUT_DIR = os.path.join(HERE, "output")
 
 START = "2015-01-01"
 TOP_N = 20                 # 每期持股檔數
+
+# 這些策略不做 top-N 排名,而是「符合條件的全部等權持有」。
+# 對於只給得出是/否的訊號(例如波浪的數法標記),硬套排名等於偷渡
+# 第二個因子,測到的就不再是那個訊號本身。
+HOLD_ALL = {"universe_ew"}
 STOP_LOSS = 0.20           # 停損幅度
 FEE = 0.001425             # 手續費(單邊)
 TAX = 0.003                # 證交稅(賣出)
@@ -304,7 +309,7 @@ def run(strategy, use_stop, price, val, revenue, all_dates, universe):
     for i, rb in enumerate(rebals):
         end_date = rebals[i + 1] if i + 1 < len(rebals) else all_dates[-1]
         span = all_dates[date_idx[rb]: date_idx[end_date] + 1]
-        n_hold = len(universe_at(universe, rb)) if strategy == "universe_ew" else TOP_N
+        n_hold = len(universe_at(universe, rb)) if strategy in HOLD_ALL else TOP_N
         picks = [s for s, _ in build_scores(strategy, rb, universe, price, val, revenue)[:n_hold]]
 
         if not picks:

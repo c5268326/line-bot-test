@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>台股訊號檢測站</title>
 <meta name="description" content="台股技術訊號掃描:均線、RSI、MACD、KD、布林通道全自動計算,標出當日觸發的技術訊號。">
+<!-- 不要被搜尋引擎收錄。這個站是給拿到連結的人看的,不是給人搜到的。
+     搭配 robots.txt 一起用:robots.txt 擋爬取,這行擋索引 ——
+     已經被抓過的頁面只有 meta 能讓它從搜尋結果移除。
+     注意:這擋得住守規矩的爬蟲,擋不住知道網址的人。repo 是公開的,
+     網址 c5268326.github.io/line-bot-test 本來就猜得到。 -->
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="googlebot" content="noindex, nofollow, noarchive">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23111827'/%3E%3Cpath d='M5 22 L12 15 L17 19 L27 8' stroke='%2300A3C4' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -136,6 +143,20 @@ body {
   transition: color .12s ease, background .12s ease;
 }
 .btn-icon:hover { color: var(--up); background: var(--up-soft); }
+
+/* ===== 資料鮮度 ===== */
+.freshness { display: flex; flex-wrap: wrap; gap: 1px; background: var(--rule);
+  border: 1px solid var(--rule); margin-bottom: 14px; }
+.fr { background: var(--surface); padding: 8px 14px; flex: 1 1 auto; min-width: 150px; }
+.fr-k { font-family: var(--mono); font-size: 9.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-faint); font-weight: 500; }
+.fr-v { font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 13px; font-weight: 600; margin-top: 2px; }
+.fr-s { font-size: 11px; color: var(--ink-faint); margin-top: 1px; }
+/* 落後於行情日期的那幾格要看得出來,不然又變成「看起來都一樣新」 */
+.fr.is-stale { border-left: 3px solid var(--ma-mid); }
+.fr.is-stale .fr-v { color: #7A5A0B; }
+.fr.is-partial .fr-s { color: #7A5A0B; font-weight: 500; }
 
 /* ================= 分頁 ================= */
 .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--rule); margin-bottom: 18px; }
@@ -312,6 +333,18 @@ table.scan tbody tr:last-child td { border-bottom: none; }
 .c-boll { stroke: var(--ink-deco); fill: none; stroke-width: 1; stroke-dasharray: 3 3; }
 .c-boll-fill { fill: var(--ink-deco); opacity: .12; }
 .c-ref { stroke: var(--rule-strong); stroke-width: 1; stroke-dasharray: 2 3; }
+/* 波浪疊圖:ZigZag 用淡線當底,被採用的數法用實線 + 編號。
+   進行中的那一段畫虛線 —— 它的終點是現在的價格,還沒走完。
+
+   顏色用近黑而不是調色盤裡的任何一條均線色:第一版用了 --ma-slow,
+   結果波浪線和 MA60 同色,圖上分不出哪條是哪條。波浪是「註記」,
+   不是又一條指標線,用文字色才讀得出層次。 */
+.c-zz { stroke: var(--ink-deco); fill: none; stroke-width: 1; opacity: .5; }
+.c-wave { stroke: var(--ink); fill: none; stroke-width: 1.6; stroke-linejoin: round; opacity: .85; }
+.c-wave-run { stroke-dasharray: 4 3; opacity: .6; }
+.c-wave-dot { fill: var(--ink); }
+.c-wave-lbl { fill: var(--ink); font-family: var(--mono); font-size: 11px; font-weight: 700;
+  paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
 .c-cross { stroke: var(--live); stroke-width: 1; pointer-events: none; }
 .c-crossdot { fill: var(--live); pointer-events: none; }
 .c-hit { fill: transparent; }
@@ -377,6 +410,46 @@ dialog::backdrop { background: rgba(16,23,37,.45); }
 .err { color: var(--up); font-size: 13px; margin-top: 8px; font-weight: 500; }
 .err:empty { display: none; }
 
+/* ===== 個股研究報告 ===== */
+.rp-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+  gap: 1px; background: var(--rule); border-bottom: 1px solid var(--rule); }
+.rp-card { background: var(--surface); padding: 11px 15px; }
+.rp-v { font-family: var(--mono); font-variant-numeric: tabular-nums;
+  font-size: 20px; font-weight: 600; line-height: 1.25; margin-top: 3px; }
+.rp-s { font-size: 11.5px; color: var(--ink-faint); margin-top: 2px; }
+.rp-sect { padding: 12px 15px; border-bottom: 1px solid var(--rule); }
+.rp-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.rp-two .rp-sect { border-right: 1px solid var(--rule); }
+.rp-two .rp-sect:last-child { border-right: none; }
+.rp-h { margin: 0 0 8px; font-family: var(--mono); font-size: 10.5px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--ink-muted); font-weight: 500; }
+.rp-sub { text-transform: none; letter-spacing: 0; color: var(--ink-faint); font-weight: 400; }
+.rp-lines { list-style: none; margin: 0; padding: 0; }
+/* 每一條判斷都帶出處:粗體是結論,後面那行是觸發它的數字 */
+.rp-line { padding: 5px 0 5px 11px; border-left: 2px solid var(--rule-strong); margin-bottom: 5px; }
+.rp-line:last-child { margin-bottom: 0; }
+.rp-line.up { border-left-color: var(--up); }
+.rp-line.down { border-left-color: var(--down); }
+.rp-line b { font-size: 13.5px; font-weight: 600; display: block; }
+.rp-line.up b { color: var(--up); }
+.rp-line.down b { color: var(--down); }
+.rp-line span { font-size: 12px; color: var(--ink-muted); line-height: 1.6; }
+table.rp-tbl { width: 100%; border-collapse: collapse; }
+table.rp-tbl th { text-align: left; padding: 5px 8px 6px; border-bottom: 1px solid var(--rule-strong);
+  font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--ink-muted); font-weight: 500; white-space: nowrap; }
+table.rp-tbl td { padding: 5px 8px; border-bottom: 1px solid var(--rule); font-size: 12.5px; }
+table.rp-tbl tr:last-child td { border-bottom: none; }
+table.rp-tbl .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.rp-k { white-space: nowrap; color: var(--ink-2); }
+.rp-lv { color: var(--ink); font-weight: 500; white-space: nowrap; }
+.rp-why { font-size: 11.5px; color: var(--ink-faint); }
+table.rp-chip { font-size: 12px; }
+.rp-foot { padding: 11px 15px; margin: 0; font-size: 12px; line-height: 1.7;
+  color: var(--ink-muted); background: var(--surface-2); }
+.rp-foot b { color: var(--ink-2); }
+@media (max-width: 700px) { .rp-why { display: none; } }
+
 /* ===== 波浪結構 ===== */
 .wave-head { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: baseline;
   padding: 11px 15px; border-bottom: 1px solid var(--rule); background: var(--surface-2);
@@ -405,6 +478,10 @@ dialog::backdrop { background: rgba(16,23,37,.45); }
 .wave-caveat { padding: 11px 15px; font-size: 12.5px; line-height: 1.7; color: var(--ink-muted);
   border-top: 1px solid var(--rule); background: var(--surface-2); }
 .wave-caveat b { color: var(--ink-2); }
+/* 證據那一段要比免責聲明更顯眼:使用者最可能照著這個面板做決定,
+   而回測說它沒有預測力 —— 那句話藏起來就等於沒說 */
+.wave-evidence { border-left: 3px solid var(--ma-mid); }
+.wave-evidence b:first-child { color: var(--ma-mid); }
 
 /* ===== 基本面(三張財報)===== */
 /* 驗證列:讓資料從哪來、可不可信,在看到數字之前就先說清楚 */
@@ -543,6 +620,12 @@ table.bt tr.is-bench td:first-child { font-weight: 700; }
     </div>
   </header>
 
+  <!-- 資料鮮度:四份資料各自的日期與涵蓋率。
+       先前只有狀態列一句「收盤資料至 X」,那對行情是真的,但財報與回測
+       是另外兩份、日期不同、涵蓋率也不同 —— 一個日期蓋住四份資料,
+       整頁就看起來都是最新的。每份自己報自己的。 -->
+  <div class="freshness" id="freshness"></div>
+
   <nav class="tabs" id="tabs">
     <button data-view="scan" class="is-active">檢測站</button>
     <button data-view="detail">個股分析</button>
@@ -616,7 +699,40 @@ table.bt tr.is-bench td:first-child { font-weight: 700; }
         <button class="toggle" data-panel="rsi">RSI</button>
         <button class="toggle" data-panel="macd">MACD</button>
         <button class="toggle" data-panel="kd">KD</button>
+        <button class="toggle" data-panel="wave">WAVE</button>
       </div>
+    </div>
+
+    <div class="panel" id="report-card" style="margin-bottom:14px" hidden>
+      <div class="panel-head">
+        <h3 class="panel-title">個股研究</h3>
+        <span class="panel-note" id="report-note"></span>
+      </div>
+      <div class="rp-cards" id="report-cards"></div>
+      <div class="rp-sect">
+        <h4 class="rp-h">重點</h4>
+        <ul class="rp-lines" id="report-verdict"></ul>
+      </div>
+      <div class="rp-two">
+        <div class="rp-sect">
+          <h4 class="rp-h">價格位置</h4>
+          <div id="report-levels"></div>
+        </div>
+        <div class="rp-sect">
+          <h4 class="rp-h">籌碼(單位:張)</h4>
+          <div id="report-chips"></div>
+        </div>
+      </div>
+      <div class="rp-sect">
+        <h4 class="rp-h">走勢最相近的個股 <span class="rp-sub">近 60 日報酬相關係數</span></h4>
+        <div id="report-peers"></div>
+      </div>
+      <p class="rp-foot">
+        以上每個數字都來自日線或證交所／櫃買的公開日報,可以自己驗算。
+        <b>這份報告不含</b>產業報價、法人預估、分點進出與新聞事件 ——
+        那些不在公開日報裡,這個管線拿不到,所以寧可留白也不填上
+        看起來很像的文字。價格位置只說明「到了那裡會遇到什麼」,不是預測。
+      </p>
     </div>
 
     <div class="panel console">
@@ -654,6 +770,18 @@ table.bt tr.is-bench td:first-child { font-weight: 700; }
         同一批資料一定得到同一組結果;但「這是第幾波」永遠有多種數法,
         規則只能否證某一種,不能證實任何一種。
         全部通過只代表<b>還沒被排除</b>,不代表它是對的。
+      </p>
+      <p class="wave-caveat wave-evidence">
+        <b>回測結果:這個標記測不出預測力。</b>
+        把同一套判讀套到 2015 年以來 47 季的 point-in-time 股票池上
+        (6,868 筆個股 × 季,每一期只用當時看得到的資料),
+        「上升第 3 波進行中」的橫斷面超額是
+        <b>+0.46pp/季、t = +0.63</b> —— 和零沒有分別。
+        關鍵在對照組:<b>判讀不出結構的那 2,531 筆,表現一樣</b>(−0.16pp,t = −0.34)。
+        唯一 |t|&gt;2 的是「下跌 5 波已完成」的 −6.40pp,但同時測了 9 個標記,
+        多重比較修正後不算數,而且方向和理論相反。
+        所以這個面板請當成<b>描述走勢的工具</b>,不要當成買賣依據。
+        完整數字見 <span class="mono">research/output/wave_backtest.md</span>。
       </p>
     </div>
 
@@ -836,7 +964,8 @@ const state = {
   view: "scan",
   selected: null,
   range: 120,
-  panels: { boll: false, vol: true, rsi: true, macd: true, kd: true },
+  // wave 預設開:使用者問「波浪能不能畫出來」,那它就該一進來就看得到。
+  panels: { boll: false, wave: true, vol: true, rsi: true, macd: true, kd: true },
   sort: { key: "score", dir: -1 },
   filter: "all",
   query: "",
@@ -966,6 +1095,386 @@ const SIG = {
   streakDn:  { t: "連續收黑", dir: -1, w: 1, why: n => `已連續 ${n} 日收低` }
 };
 
+/* ============ 個股研究:可計算的價量結構 ============
+
+   這一段只做「從日線就能算出來、而且算法固定」的事實:
+   連漲天數、量能倍數、K 線型態、未回補缺口、上方套牢帶、均線位置、
+   相對強弱。每一項都是同樣的資料一定得到同樣的答案。
+
+   刻意不做的:產業報價、法人預估、分點進出、新聞事件。
+   那些不在日線裡,這裡拿不到 —— 憑印象寫出來的數字比沒有更糟。 */
+
+/* 連續同向天數,以及這一段累計漲跌幅。
+   「連 6 漲 18%」這種描述要兩個數字才完整:只講天數看不出幅度。 */
+function streakRun(bars) {
+  const n = bars.length;
+  if (n < 2) return null;
+  const dir = bars[n - 1].c > bars[n - 2].c ? 1 : bars[n - 1].c < bars[n - 2].c ? -1 : 0;
+  if (!dir) return { dir: 0, days: 0, pct: 0, from: bars[n - 1].d };
+  let i = n - 1;
+  while (i > 0 && (bars[i].c - bars[i - 1].c) * dir > 0) i--;
+  // i 停在起漲(跌)那天的前一天,基準價用它的收盤
+  const base = bars[i].c;
+  return { dir, days: n - 1 - i, pct: base > 0 ? (bars[n - 1].c / base - 1) : 0,
+           from: bars[i + 1] ? bars[i + 1].d : bars[i].d, baseDate: bars[i].d };
+}
+
+/* 量能:和前 5 日、前 20 日的均量比。
+   均量刻意「不含當天」—— 把當天算進去會稀釋掉自己的爆量,
+   量愈大分母被墊得愈高,結論就愈保守,那不是我們想量的東西。 */
+function volumeState(bars) {
+  const n = bars.length, v = bars[n - 1].v;
+  const avg = k => {
+    const s = bars.slice(Math.max(0, n - 1 - k), n - 1);
+    return s.length ? s.reduce((a, b) => a + b.v, 0) / s.length : null;
+  };
+  const a5 = avg(5), a20 = avg(20);
+  return {
+    v, a5, a20,
+    x5: a5 ? v / a5 : null,
+    x20: a20 ? v / a20 : null,
+    // 分級用 20 日均量:5 日均量本身就會被近期爆量帶高
+    level: !a20 ? null : v >= a20 * 2 ? "爆量" : v >= a20 * 1.5 ? "放量"
+         : v <= a20 * 0.5 ? "窒息量" : v <= a20 * 0.8 ? "量縮" : "量平",
+  };
+}
+
+/* K 線型態:用實體與影線占全距的比例判斷,不用固定金額門檻
+   —— 30 元的股票和 1000 元的股票,「跌 1 元」的意義天差地遠。 */
+function candleShape(bar, prevClose) {
+  const range = bar.h - bar.l;
+  if (!(range > 0)) return { name: "一字", body: 0, up: 0, dn: 0, chg: 0 };
+  const body = Math.abs(bar.c - bar.o);
+  const upper = bar.h - Math.max(bar.o, bar.c);
+  const lower = Math.min(bar.o, bar.c) - bar.l;
+  const bodyR = body / range, upR = upper / range, dnR = lower / range;
+  const red = bar.c >= bar.o;
+  const chg = prevClose > 0 ? bar.c / prevClose - 1 : 0;
+  let name;
+  if (bodyR < 0.1) name = upR > 0.4 && dnR > 0.4 ? "長腳十字" : "十字";
+  else if (bodyR >= 0.6) name = red ? "長紅" : "長黑";
+  else if (upR >= 0.45) name = red ? "帶上影紅K" : "帶上影黑K";
+  else if (dnR >= 0.45) name = red ? "帶下影紅K" : "帶下影黑K";
+  else name = red ? "紅K" : "黑K";
+  return { name, red, body: bodyR, up: upR, dn: dnR, chg, range: range / bar.c };
+}
+
+/* 未回補的跳空缺口。
+   缺口被「碰到」就算回補 —— 用上緣/下緣而不是完全穿越,
+   因為壓力與支撐的意義在價格觸及的那一刻就已經被測試過了。 */
+function openGaps(bars, lookback = 120) {
+  const start = Math.max(1, bars.length - lookback);
+  const out = [];
+  for (let i = start; i < bars.length; i++) {
+    const prev = bars[i - 1], cur = bars[i];
+    let g = null;
+    if (cur.l > prev.h) g = { dir: 1, lo: prev.h, hi: cur.l, i, d: cur.d };
+    else if (cur.h < prev.l) g = { dir: -1, lo: cur.h, hi: prev.l, i, d: cur.d };
+    if (!g) continue;
+    // 往後找有沒有被碰到
+    let filled = false;
+    for (let j = i + 1; j < bars.length; j++) {
+      if (g.dir === 1 ? bars[j].l <= g.lo : bars[j].h >= g.hi) { filled = true; break; }
+    }
+    if (!filled) out.push(g);
+  }
+  return out.reverse();   // 最近的排前面
+}
+
+/* 上方套牢帶 / 下方支撐帶:成交量在價格上的分布(volume profile)。
+   每根 K 棒的量平均攤在它的最高最低之間,再找目前價格上方(或下方)
+   量最集中的一段連續價區。
+
+   「套牢」是有具體意義的:那一段價位上有大量的人買在那裡,
+   股價漲回去時他們會想解套 —— 所以量愈集中、壓力愈實在。 */
+function volumeProfile(bars, lookback = 120, bins = 40) {
+  const seg = bars.slice(-lookback);
+  if (seg.length < 20) return null;
+  let lo = Infinity, hi = -Infinity;
+  for (const b of seg) { if (b.l < lo) lo = b.l; if (b.h > hi) hi = b.h; }
+  if (!(hi > lo)) return null;
+  const w = (hi - lo) / bins;
+  const vol = new Array(bins).fill(0);
+  let total = 0;
+  for (const b of seg) {
+    const a = Math.max(0, Math.min(bins - 1, Math.floor((b.l - lo) / w)));
+    const z = Math.max(0, Math.min(bins - 1, Math.floor((b.h - lo) / w)));
+    const share = b.v / (z - a + 1);
+    for (let k = a; k <= z; k++) vol[k] += share;
+    total += b.v;
+  }
+  const last = bars[bars.length - 1].c;
+  const at = p => Math.max(0, Math.min(bins - 1, Math.floor((p - lo) / w)));
+  const cur = at(last);
+
+  // 每個 3 格視窗的量,後面兩種找法都用它
+  const win = [];
+  for (let k = 0; k + 2 < bins; k++) win.push(vol[k] + vol[k + 1] + vol[k + 2]);
+  const sorted = win.filter(x => x > 0).slice().sort((a, b) => a - b);
+  const medWin = sorted.length ? sorted[Math.floor(sorted.length / 2)] : 0;
+  const mk = k => ({ lo: lo + k * w, hi: lo + (k + 3) * w,
+                     share: total ? win[k] / total : null });
+
+  // 量最大的一段:真正的套牢重區
+  const heaviest = (from, to) => {
+    let best = null;
+    for (let k = Math.max(0, from); k <= Math.min(win.length - 1, to); k++)
+      if (!best || win[k] > win[best]) best = k;
+    return best != null && win[best] > 0 ? mk(best) : null;
+  };
+
+  /* 從現價往外走,第一段「完全落在該側、而且量不算薄」的價帶。
+
+     兩個條件都是修出來的:
+     1) 整段要落在該側。先前只從現價那一格開始掃,回傳的區間會跨過現價
+        —— 群創收 49.35,「往下先遇到」卻回 47.77~51.50,上緣比現價還高。
+        標著「往下」的東西不該往上跑。
+     2) 不要求局部高點。先前規定必須是局部極大,但價格上方的量能經常是
+        單調遞減的:群創現價上方是 4.94M → 3.43M → 2.65M 一路往下,
+        找不到局部高點,於是「往上先遇到」一路跳到 15 元之外的 65.15,
+        比「上方量最重」的 50.26 還遠 —— 讀起來完全相反。 */
+  const nearest = (dir) => {
+    const step = dir > 0 ? 1 : -1;
+    for (let k = cur; k >= 0 && k < win.length; k += step) {
+      const bLo = lo + k * w, bHi = lo + (k + 3) * w;
+      if (dir > 0 ? bLo < last : bHi > last) continue;   // 必須整段在該側
+      if (win[k] > medWin) return mk(k);
+    }
+    return null;
+  };
+
+  return {
+    overhead: heaviest(cur + 1, win.length - 1),   // 上方量最重的套牢帶
+    support: heaviest(0, cur - 3),                 // 下方量最重的價帶
+    nearUp: nearest(1),                            // 往上先碰到的量堆
+    nearDn: nearest(-1),                           // 往下先碰到的量堆
+    poc: (() => {
+      let m = 0;
+      for (let k = 1; k < bins; k++) if (vol[k] > vol[m]) m = k;
+      return lo + (m + 0.5) * w;
+    })(),
+    lookback: seg.length,
+  };
+}
+
+/* 相對強弱:這檔在整個清單裡的報酬排名百分位。
+   絕對漲跌看不出「是自己強還是大盤在推」,要和同一段期間的其他股票比。 */
+function relativeStrength(dsList, code, days) {
+  const ret = ds => {
+    const b = ds.bars;
+    if (!b || b.length <= days) return null;
+    const a = b[b.length - 1 - days].c, z = b[b.length - 1].c;
+    return a > 0 ? z / a - 1 : null;
+  };
+  const rows = [];
+  for (const ds of dsList) {
+    const r = ret(ds);
+    if (r != null && isFinite(r)) rows.push([ds.code || ds.id, r]);
+  }
+  if (rows.length < 10) return null;
+  rows.sort((a, b) => a[1] - b[1]);
+  const i = rows.findIndex(r => r[0] === code);
+  if (i < 0) return null;
+  return { pctile: i / (rows.length - 1), ret: rows[i][1],
+           median: rows[Math.floor(rows.length / 2)][1], n: rows.length };
+}
+
+/* ============ 個股研究報告 ============
+
+   把上面那些可計算的事實組成一份結構化的研究筆記。
+
+   兩條規矩:
+   1) 每一句判斷都要指出它是被哪個數字觸發的。這裡不寫「看好」「轉強」
+      這種沒有出處的話 —— 讀的人要能自己驗算。
+   2) 拿不到的東西就說拿不到。產業報價、法人預估、分點進出、新聞事件
+      都不在日線與公開日報裡,這份報告不會有那幾段,也不會用
+      看起來很像的文字把空位填掉。 */
+
+/* 走勢最相近的個股。
+   沒有產業分類資料,所以不寫「面板三虎」這種標籤,改用日報酬相關係數
+   —— 它量的是「實際上跟著一起動的是誰」,比靜態的產業別更貼近盤面。 */
+function similarStocks(dsList, code, days = 60, top = 5) {
+  const rets = ds => {
+    const b = ds.bars;
+    if (!b || b.length < days + 1) return null;
+    const r = [];
+    for (let i = b.length - days; i < b.length; i++) {
+      const p = b[i - 1].c;
+      r.push(p > 0 ? b[i].c / p - 1 : 0);
+    }
+    return r;
+  };
+  const me = rets(dsList.find(d => (d.code || d.id) === code) || {});
+  if (!me) return [];
+  const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+  const mu = mean(me);
+  const dm = me.map(x => x - mu);
+  const sm = Math.sqrt(dm.reduce((a, b) => a + b * b, 0));
+  const out = [];
+  for (const ds of dsList) {
+    const c = ds.code || ds.id;
+    if (c === code) continue;
+    const r = rets(ds);
+    if (!r) continue;
+    const m2 = mean(r), d2 = r.map(x => x - m2);
+    const s2 = Math.sqrt(d2.reduce((a, b) => a + b * b, 0));
+    if (!(sm > 0 && s2 > 0)) continue;
+    let dot = 0;
+    for (let i = 0; i < days; i++) dot += dm[i] * d2[i];
+    out.push({ code: c, name: ds.name, r: dot / (sm * s2),
+               ret: ds.bars[ds.bars.length - 1].c / ds.bars[ds.bars.length - 1 - days].c - 1 });
+  }
+  out.sort((a, b) => b.r - a.r);
+  return out.slice(0, top);
+}
+
+/* 把籌碼的原始股數整理成「張」,並算出近 N 日的累計。 */
+function chipSeries(code, dates, n = 10) {
+  const c = chips.data && chips.data.stocks && chips.data.stocks[code];
+  if (!c) return null;
+  const days = (chips.data.dates || []).slice(-n);
+  const rows = days.map(d => {
+    const i = c.inst && c.inst[d];
+    return {
+      d,
+      foreign: i && i.foreign != null ? i.foreign / 1000 : null,
+      trust: i && i.trust != null ? i.trust / 1000 : null,
+      dealer: i && i.dealer != null ? i.dealer / 1000 : null,
+      total: i && i.total != null ? i.total / 1000 : null,
+      margin: c.margin && c.margin[d] != null ? c.margin[d] : null,
+      short: c.short && c.short[d] != null ? c.short[d] : null,
+    };
+  });
+  const sum = k => {
+    const v = rows.map(r => r[k]).filter(x => x != null);
+    return v.length ? v.reduce((a, b) => a + b, 0) : null;
+  };
+  // 融資餘額的公布時間比法人買賣超晚。當天收盤後跑,常常只有法人有、
+  // 融資還沒出來 —— 那時最後一筆融資是前一天的。把它的日期一起帶出去,
+  // 不然畫面上會出現「9/16 的外資」配「9/15 的融資」而看不出來。
+  const margRows = rows.filter(r => r.margin != null);
+  const marg = margRows.map(r => r.margin);
+  const allDays = chips.data.dates || [];
+  const allForeign = allDays.map(d => {
+    const i = c.inst && c.inst[d];
+    return i && i.foreign != null ? i.foreign / 1000 : null;
+  }).filter(x => x != null);
+  return {
+    rows,
+    sumForeign: sum("foreign"), sumTotal: sum("total"),
+    // 整段期間的外資累計,用來分辨「單日倒貨」和「真的轉空」
+    cumForeign: allForeign.length ? allForeign.reduce((a, b) => a + b, 0) : null,
+    cumDays: allForeign.length,
+    marginFirst: marg.length ? marg[0] : null,
+    marginLast: marg.length ? marg[marg.length - 1] : null,
+    marginDate: margRows.length ? margRows[margRows.length - 1].d : null,
+    marginStale: margRows.length
+      ? margRows[margRows.length - 1].d !== rows[rows.length - 1].d : false,
+    // 本益比和融資一樣比法人晚公布。只看最後一天的話,收盤後馬上跑就會
+    // 整張卡片消失 —— 那讓人以為「這檔沒有估值」,而不是「今天還沒出來」。
+    // 往回找最近一筆,並把日期帶出去。
+    value: (() => {
+      for (let k = days.length - 1; k >= 0; k--) {
+        const v = c.value && c.value[days[k]];
+        if (v && v.per != null) return { ...v, d: days[k], stale: k !== days.length - 1 };
+      }
+      return null;
+    })(),
+  };
+}
+
+/* 一句話:由規則組成,每一條都附上觸發它的數字。 */
+function verdictLines(f) {
+  const L = [];
+  const pct = x => `${(x * 100).toFixed(1)}%`;
+
+  if (f.streak && f.streak.days >= 3) {
+    L.push({ tone: f.streak.dir > 0 ? "up" : "down",
+      txt: `連${f.streak.days}${f.streak.dir > 0 ? "漲" : "跌"} ${pct(Math.abs(f.streak.pct))}`,
+      why: `${f.streak.baseDate} 收 ${nf(f.streak.base, 2)} → ${f.lastD} 收 ${nf(f.close, 2)}` });
+  }
+  if (f.vol && f.vol.level && f.vol.level !== "量平") {
+    L.push({ tone: "note", txt: f.vol.level,
+      why: `${nf(f.vol.v, 0)} 張,為 20 日均量的 ${f.vol.x20.toFixed(2)} 倍` });
+  }
+  if (f.candle && /長黑|長紅/.test(f.candle.name)) {
+    L.push({ tone: f.candle.red ? "up" : "down", txt: f.candle.name,
+      why: `實體占全日振幅 ${pct(f.candle.body)},收盤${f.candle.chg >= 0 ? "漲" : "跌"} ${pct(Math.abs(f.candle.chg))}` });
+  }
+  if (f.chip && f.chip.sumForeign != null) {
+    const s = f.chip.sumForeign;
+    L.push({ tone: s > 0 ? "up" : s < 0 ? "down" : "note",
+      txt: `外資近 ${f.chip.rows.length} 日${s >= 0 ? "買超" : "賣超"} ${nf(Math.abs(s), 0)} 張`,
+      why: f.chip.cumForeign != null
+        ? `同期間 ${f.chip.cumDays} 日累計${f.chip.cumForeign >= 0 ? "買超" : "賣超"} ${nf(Math.abs(f.chip.cumForeign), 0)} 張 —— 單日進出要放回這個累計看`
+        : "" });
+  }
+  if (f.chip && f.chip.marginFirst != null && f.chip.marginLast != null && f.chip.marginFirst > 0) {
+    const ch = f.chip.marginLast / f.chip.marginFirst - 1;
+    if (Math.abs(ch) >= 0.03) {
+      // 融資增加＝散戶加碼,和外資方向相反時特別值得標出來
+      const against = f.chip.sumForeign != null && (ch > 0) !== (f.chip.sumForeign > 0);
+      L.push({ tone: ch > 0 ? "note" : "note",
+        txt: `融資餘額${ch > 0 ? "增" : "減"} ${pct(Math.abs(ch))}`,
+        why: `${nf(f.chip.marginFirst, 0)} → ${nf(f.chip.marginLast, 0)} 張`
+             + (against ? "、與同期外資方向相反" : "") });
+    }
+  }
+  if (f.rs20) {
+    L.push({ tone: f.rs20.pctile >= 0.7 ? "up" : f.rs20.pctile <= 0.3 ? "down" : "note",
+      txt: `20 日相對強弱 ${(f.rs20.pctile * 100).toFixed(0)} 分位`,
+      why: `本檔 ${pct(f.rs20.ret)},全體中位數 ${pct(f.rs20.median)}(${f.rs20.n} 檔)` });
+  }
+  return L;
+}
+
+/* 把「價格會先碰到哪裡」講清楚:上方套牢帶、下方支撐帶、未回補缺口。
+   這些是位置,不是預測 —— 它們只說明價格到了那裡會遇到什麼。 */
+function levelRows(f) {
+  const rows = [];
+  const p = f.profile;
+  const band = (b, label, tone) => b && rows.push([label,
+    `${nf(b.lo, 2)} ~ ${nf(b.hi, 2)}`,
+    `近 ${p.lookback} 日有 ${(b.share * 100).toFixed(1)}% 的成交量在這一段`, tone]);
+
+  // 順序照「價格會先碰到誰」排,不是照量大小排
+  if (p) band(p.nearUp, "往上先遇到", "down");
+  if (p && p.overhead && (!p.nearUp || Math.abs(p.overhead.lo - p.nearUp.lo) > 1e-9))
+    band(p.overhead, "上方量最重", "down");
+  for (const g of (f.gaps || []).slice(0, 2)) {
+    rows.push([g.dir > 0 ? "未回補向上缺口" : "未回補向下缺口",
+      `${nf(g.lo, 2)} ~ ${nf(g.hi, 2)}`, `${g.d} 跳空,至今未被觸及`,
+      g.dir > 0 ? "up" : "down"]);
+  }
+  if (p) band(p.nearDn, "往下先遇到", "up");
+  if (p && p.support && (!p.nearDn || Math.abs(p.support.lo - p.nearDn.lo) > 1e-9))
+    band(p.support, "下方量最重", "up");
+  if (p) rows.push(["量能重心", nf(p.poc, 2), `近 ${p.lookback} 日成交量最集中的價位`, "note"]);
+  return rows;
+}
+
+function buildReport(ds) {
+  const bars = ds.bars;
+  if (!bars || bars.length < 60) return null;
+  const last = bars[bars.length - 1], prev = bars[bars.length - 2];
+  const st = streakRun(bars);
+  const code = ds.code || ds.id;
+  return {
+    code, name: ds.name, market: ds.market,
+    lastD: last.d, close: last.c, prevClose: prev.c,
+    chg: prev.c > 0 ? last.c / prev.c - 1 : 0,
+    streak: st && { ...st, base: bars.find(b => b.d === st.baseDate) ?
+                    bars.find(b => b.d === st.baseDate).c : null },
+    vol: volumeState(bars),
+    candle: candleShape(last, prev.c),
+    gaps: openGaps(bars, 90),
+    profile: volumeProfile(bars, 120, 40),
+    rs20: relativeStrength(state.datasets, code, 20),
+    chip: chipSeries(code, chips.data && chips.data.dates),
+    peers: similarStocks(state.datasets, code, 60, 5),
+  };
+}
+
 /* ============ 波浪結構(艾略特)============
 
    先講清楚這個模組能做什麼、不能做什麼。
@@ -1067,7 +1576,8 @@ function waveCount(bars) {
   const build = (pts, label, waveNo, dirUp, rules) => ({
     label, waveNo, up: dirUp, rules,
     ok: rules.every(r => r.ok),
-    pts: pts.map(x => ({ d: bars[x.i].d, p: x.p, t: x.t })),
+    // 保留 i:清單只需要日期,但畫在圖上要知道是第幾根 K 棒
+    pts: pts.map(x => ({ i: x.i, d: bars[x.i].d, p: x.p, t: x.t })),
   });
 
   // 情境一:最後 6 個轉折構成完整 5 波,目前在其後的修正
@@ -1108,7 +1618,7 @@ function waveCount(bars) {
       ];
       out.candidates.push({ label: up ? "上升推動" : "下跌推動", waveNo: "第 4 波修正中",
                             up, rules, ok: rules.every(r => r.ok),
-                            pts: seq.map(x => ({ d: bars[x.i] ? bars[x.i].d : bars[bars.length - 1].d, p: x.p, t: x.t })) });
+                            pts: seq.map(x => ({ i: x.i, d: bars[x.i] ? bars[x.i].d : bars[bars.length - 1].d, p: x.p, t: x.t })) });
     }
   }
   // 情境四:最後 3 個轉折 + 目前價格 = 進行中的第 3 波
@@ -1126,7 +1636,7 @@ function waveCount(bars) {
       ];
       const c = { label: up ? "上升推動" : "下跌推動", waveNo: "第 3 波進行中",
                   up, rules, ok: rules.every(r => r.ok),
-                  pts: seq.map(x => ({ d: bars[x.i] ? bars[x.i].d : bars[bars.length - 1].d, p: x.p, t: x.t })) };
+                  pts: seq.map(x => ({ i: x.i, d: bars[x.i] ? bars[x.i].d : bars[bars.length - 1].d, p: x.p, t: x.t })) };
       c.fib = { ratio: w1 > 0 ? w3 / w1 : null, w1, w3 };
       out.candidates.push(c);
     }
@@ -1598,6 +2108,44 @@ function renderStats() {
   document.getElementById("sb-date").textContent = latest ? latest.replace(/-/g, "/") : "—";
 }
 
+/* 四份資料各自的日期與涵蓋率。哪一份落後、哪一份只抓了一部分,
+   要在使用者相信它之前就先講。 */
+async function renderFreshness() {
+  const host = document.getElementById("freshness");
+  if (!host) return;
+  const [fu, ch] = [await loadFundamentals(), await loadChips()];
+  const bt = await loadBacktest();
+  const total = state.datasets.filter(d => d.code).length;
+  const asOf = (state.feed && state.feed.asOf) || null;
+
+  const rows = [];
+  rows.push({ k: "行情", v: asOf || "—", s: `${total} 檔日線`, d: asOf });
+  if (ch && ch.dates && ch.dates.length) {
+    const n = Object.keys(ch.stocks || {}).length;
+    rows.push({ k: "籌碼", v: ch.dates[ch.dates.length - 1],
+                s: `${n} 檔 ・ 法人/融資/評價`, d: ch.dates[ch.dates.length - 1] });
+  }
+  if (fu && fu.stocks) {
+    const n = Object.keys(fu.stocks).length;
+    rows.push({ k: "財報", v: (fu.updated_at || "").slice(0, 10) || "—",
+                s: `${n} / ${total} 檔`, d: (fu.updated_at || "").slice(0, 10),
+                partial: n < total });
+  }
+  if (bt && bt.config && bt.config.end) {
+    rows.push({ k: "回測", v: bt.config.end,
+                s: `${bt.config.start} 起 ・ ${bt.config.universe_mode || ""}`.trim(),
+                d: bt.config.end });
+  }
+
+  host.innerHTML = rows.map(r => {
+    const stale = asOf && r.d && r.d < asOf;
+    const cls = [stale ? "is-stale" : "", r.partial ? "is-partial" : ""].filter(Boolean).join(" ");
+    const note = r.partial ? `${r.s} ・ 其餘尚未抓取` : r.s;
+    return `<div class="fr ${cls}"><div class="fr-k">${esc(r.k)}</div>
+      <div class="fr-v">${esc(r.v)}</div><div class="fr-s">${esc(note)}</div></div>`;
+  }).join("");
+}
+
 function renderStatusSource() {
   const dot = document.getElementById("sb-dot");
   const txt = document.getElementById("sb-source");
@@ -1780,6 +2328,62 @@ function renderChart() {
       s += `<path class="c-ma-slow" d="${linePath(ind.maSlow, y)}"/>`;
       s += `<path class="c-ma-mid" d="${linePath(ind.maMid, y)}"/>`;
       s += `<path class="c-ma-fast" d="${linePath(ind.maFast, y)}"/>`;
+      // ---- 波浪結構疊圖 ----
+      if (state.panels.wave) {
+        const w = waveCount(body);
+        const conf = w.pivots.filter(v => !v.tentative);
+
+        // 底層:整段 ZigZag,淡的。讓人看見轉折是怎麼被機械式挑出來的,
+        // 而不是只看到最後那幾個被標上編號的點。
+        let zz = "";
+        for (const v of conf) {
+          if (v.i < i0 || v.i > i1) continue;
+          zz += `${zz ? "L" : "M"}${x(v.i).toFixed(1)} ${y(v.p).toFixed(1)} `;
+        }
+        if (zz) s += `<path class="c-zz" d="${zz}"/>`;
+
+        // 上層:第一個「未被規則排除」的數法。被排除的不畫 ——
+        // 圖上同時疊三種數法只會變成一團線,那比不畫更糟。
+        const cand = w.candidates.find(c => c.ok);
+        if (cand && cand.pts.length >= 2) {
+          // 每一種候選的 pts 都是「推動段」的轉折,一律標 0~5。
+          // 先前對「修正段(ABC)」改標 A/B/C 是錯的:那六個點是已經走完的
+          // 推動五波,ABC 是接下來要走、圖上還沒有的東西 —— 標在舊點上
+          // 等於把還沒發生的事畫成已經發生。
+          const lbl = ["0", "1", "2", "3", "4", "5"];
+          let d = "", dash = "";
+          const pts = cand.pts;
+          for (let k = 0; k < pts.length; k++) {
+            const q = pts[k];
+            const seg = `${x(q.i).toFixed(1)} ${y(q.p).toFixed(1)}`;
+            // 最後一段的終點是「現在的價格」,那一段還沒走完,畫虛線
+            const running = k === pts.length - 1 && q.i === body.length - 1
+                            && /進行中|修正中/.test(cand.waveNo);
+            if (k === 0) d += `M${seg} `;
+            else if (running) { dash = `M${x(pts[k-1].i).toFixed(1)} ${y(pts[k-1].p).toFixed(1)} L${seg}`; }
+            else d += `L${seg} `;
+          }
+          if (d.trim() !== "" && d.indexOf("L") >= 0) s += `<path class="c-wave" d="${d}"/>`;
+          if (dash) s += `<path class="c-wave c-wave-run" d="${dash}"/>`;
+
+          for (let k = 0; k < pts.length; k++) {
+            const q = pts[k];
+            if (q.i < i0 || q.i > i1) continue;
+            const cx = x(q.i), cy = y(q.p);
+            // 標號放在轉折的外側:高點往上、低點往下,才不會蓋到 K 棒
+            const up = q.t === "H";
+            s += `<circle class="c-wave-dot" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.6"/>`;
+            const t = lbl[k] != null ? lbl[k] : "";
+            if (t !== "") {
+              s += `<text class="c-wave-lbl" x="${cx.toFixed(1)}" y="${(cy + (up ? -8 : 15)).toFixed(1)}"`
+                 + ` text-anchor="middle">${t}</text>`;
+            }
+          }
+        }
+        const note = cand ? cand.waveNo : (w.candidates.length ? "所有數法都被規則排除" : "判讀不出結構");
+        s += `<text class="c-lbl" x="${padL + 4}" y="${p.top + 27}">Wave · ${esc(note)}</text>`;
+      }
+
       s += `<text class="c-lbl" x="${padL + 4}" y="${p.top + 13}">Price · MA</text>`;
 
       // 被點選的訊號:在價格面板標一個記號
@@ -1937,6 +2541,11 @@ function renderLegend() {
   const p = state.params;
   const items = [[`MA${p.maFast}`, "var(--ma-fast)"], [`MA${p.maMid}`, "var(--ma-mid)"], [`MA${p.maSlow}`, "var(--ma-slow)"]];
   if (state.panels.boll) items.push(["布林 ±2σ", "var(--ink-deco)"]);
+  if (state.panels.wave) {
+    items.push(["ZigZag 全部轉折", "var(--ink-deco)"],
+               ["採用的數法 0~5", "var(--ink)"],
+               ["虛線:這一段還沒走完", "var(--ink-faint)"]);
+  }
   items.push(["上漲 / 多方", "var(--up)"], ["下跌 / 空方", "var(--down)"]);
   document.getElementById("legendrow").innerHTML =
     items.map(([t, c]) => `<span class="lg"><i style="background:${c}"></i>${esc(t)}</span>`).join("") +
@@ -1978,6 +2587,23 @@ function renderEvents() {
       <div><div class="ev-t"><span class="ev-dot" style="background:${c}"></span>${esc(e.title)}</div><div class="ev-x">${esc(e.why)}</div></div>
     </div>`;
   }).join("");
+}
+
+/* ============ 籌碼面 ============
+   資料由 research/fetch_chips.py 從證交所與櫃買的全市場日報抓取。
+   融資餘額已用 FinMind 同日數值交叉驗證過(欄位挑錯不會報錯,
+   只會給出錯的數字)。 */
+const chips = { data: null, tried: false };
+
+async function loadChips() {
+  if (chips.tried) return chips.data;
+  chips.tried = true;
+  const el = document.getElementById("seed-chips");
+  if (el && el.textContent.trim()) {
+    try { chips.data = JSON.parse(el.textContent); } catch (e) { /* 壞掉就走 fetch */ }
+  }
+  if (!chips.data) chips.data = await tryFetch("data/chips.json");
+  return chips.data;
 }
 
 /* ============ 基本面(三張財報)============
@@ -2045,6 +2671,112 @@ function trend(series, opts) {
     return { cls: "trend-flat", txt: `${vals.length} 年變動 ${d >= 0 ? "+" : "−"}${mag.toFixed(0)}%,持平${suffix}` };
   }
   return { cls: dir(d > 0), txt: `${d > 0 ? "升" : "降"} ${mag.toFixed(0)}%${suffix}` };
+}
+
+function renderReport() {
+  const card = document.getElementById("report-card");
+  const ds = state.datasets.find(d => d.id === state.selected);
+  const f = ds ? buildReport(ds) : null;
+  if (!f) { card.hidden = true; return; }
+  card.hidden = false;
+
+  const cls = t => t === "up" ? "up" : t === "down" ? "down" : "flat";
+  const sign = x => (x >= 0 ? "+" : "−") + nf(Math.abs(x) * 100, 2) + "%";
+
+  document.getElementById("report-note").textContent =
+    `${f.lastD} 收盤 ・ 全部數字由日線與公開日報計算`;
+
+  // ---- 頂部數字條 ----
+  const cards = [
+    ["收盤", nf(f.close, 2), sign(f.chg), f.chg >= 0 ? "up" : "down"],
+    ["成交量", nf(f.vol.v, 0) + " 張",
+     f.vol.x20 ? `20 日均量 ${f.vol.x20.toFixed(2)} 倍` : "", "note"],
+  ];
+  if (f.streak && f.streak.days >= 2) {
+    cards.push([`連${f.streak.days}${f.streak.dir > 0 ? "漲" : "跌"}`,
+      sign(f.streak.pct), `自 ${f.streak.baseDate} 收盤起算`,
+      f.streak.dir > 0 ? "up" : "down"]);
+  }
+  if (f.chip && f.chip.sumForeign != null) {
+    cards.push([`外資 ${f.chip.rows.length} 日`,
+      (f.chip.sumForeign >= 0 ? "+" : "−") + nf(Math.abs(f.chip.sumForeign), 0) + " 張",
+      f.chip.cumForeign != null
+        ? `${f.chip.cumDays} 日累計 ${f.chip.cumForeign >= 0 ? "+" : "−"}${nf(Math.abs(f.chip.cumForeign), 0)}`
+        : "", f.chip.sumForeign >= 0 ? "up" : "down"]);
+  }
+  if (f.chip && f.chip.marginLast != null) {
+    const ch = f.chip.marginFirst ? f.chip.marginLast / f.chip.marginFirst - 1 : null;
+    const chg = ch != null ? `期間${ch >= 0 ? "增" : "減"} ${nf(Math.abs(ch) * 100, 1)}%` : "";
+    // 融資比其他欄位晚公布。日期不同就標出來,不要讓人以為是同一天的。
+    cards.push([f.chip.marginStale ? `融資餘額(${f.chip.marginDate.slice(5)})` : "融資餘額",
+      nf(f.chip.marginLast, 0) + " 張",
+      f.chip.marginStale ? `${chg}・當日尚未公布` : chg, "note"]);
+  }
+  if (f.chip && f.chip.value && f.chip.value.per != null) {
+    const v = f.chip.value;
+    const y = v["yield"] != null ? `殖利率 ${nf(v["yield"], 2)}%` : "";
+    cards.push([v.stale ? `本益比 / 淨值比(${v.d.slice(5)})` : "本益比 / 淨值比",
+      `${nf(v.per, 1)} / ${nf(v.pbr, 2)}`,
+      v.stale ? `${y}${y ? "・" : ""}當日尚未公布` : y, "note"]);
+  }
+  document.getElementById("report-cards").innerHTML = cards.map(([k, v, s, t]) =>
+    `<div class="rp-card"><div class="lbl">${esc(k)}</div>
+       <div class="rp-v ${cls(t)}">${esc(v)}</div>
+       <div class="rp-s">${esc(s || "")}</div></div>`).join("");
+
+  // ---- 一句話 ----
+  const lines = verdictLines(f);
+  document.getElementById("report-verdict").innerHTML = lines.length
+    ? lines.map(l => `<li class="rp-line ${cls(l.tone)}"><b>${esc(l.txt)}</b>${
+        l.why ? `<span>${esc(l.why)}</span>` : ""}</li>`).join("")
+    : `<li class="rp-line flat"><b>目前沒有觸發任何門檻</b><span>連漲未達 3 日、量能在均量區間內、K 線無明顯型態</span></li>`;
+
+  // ---- 價格位置 ----
+  const lv = levelRows(f);
+  // 價位刻意不上紅綠:全站的紅綠是「漲/跌」的意思,
+  // 壓力價位標成綠色會被讀成「這個價格在跌」。方向已經寫在標籤裡了。
+  document.getElementById("report-levels").innerHTML = lv.length
+    ? `<table class="rp-tbl"><tbody>${lv.map(([k, v, why]) =>
+        `<tr><td class="rp-k">${esc(k)}</td><td class="num rp-lv">${esc(v)}</td>
+          <td class="rp-why">${esc(why)}</td></tr>`).join("")}</tbody></table>`
+    : `<p class="hint" style="padding:2px 0">資料不足,算不出價量分布</p>`;
+
+  // ---- 籌碼逐日 ----
+  const host = document.getElementById("report-chips");
+  if (!f.chip) {
+    host.innerHTML = `<p class="hint" style="padding:2px 0">這檔沒有籌碼資料。`
+      + `籌碼來自證交所與櫃買的全市場日報,若個股當期無交易或不在日報範圍內就會沒有。</p>`;
+  } else {
+    // 用「有沒有外資分項」決定要不要拆欄,而不是用 market 欄位:
+    // market 來自 TaiwanStockInfo,有 15 檔是轉上市前的舊分類(藥華藥、保瑞、
+    // 鴻勁…)。籌碼從哪個日報抓到是當下觀察到的事實,比宣告的欄位可靠。
+    const otc = !f.chip.rows.some(r => r.foreign != null);
+    host.innerHTML =
+      `<table class="rp-tbl rp-chip"><thead><tr><th>日期</th>`
+      + (otc ? `<th class="t-right">三大法人</th>` :
+         `<th class="t-right">外資</th><th class="t-right">投信</th><th class="t-right">自營</th>`)
+      + `<th class="t-right">融資餘額</th></tr></thead><tbody>`
+      + f.chip.rows.map(r => {
+          const cell = x => x == null ? `<td class="t-right flat">—</td>`
+            : `<td class="t-right num ${x >= 0 ? "up" : "down"}">${x >= 0 ? "+" : "−"}${nf(Math.abs(x), 0)}</td>`;
+          return `<tr><td class="num">${esc(r.d.slice(5))}</td>`
+            + (otc ? cell(r.total) : cell(r.foreign) + cell(r.trust) + cell(r.dealer))
+            + `<td class="t-right num">${r.margin == null ? "—" : nf(r.margin, 0)}</td></tr>`;
+        }).join("")
+      + `</tbody></table>`
+      + (otc ? `<p class="hint" style="margin:6px 0 0">上櫃個股的櫃買日報只提供三大法人合計,沒有分項。</p>` : "");
+  }
+
+  // ---- 走勢相近 ----
+  const peers = f.peers || [];
+  document.getElementById("report-peers").innerHTML = peers.length
+    ? `<table class="rp-tbl"><thead><tr><th>個股</th><th class="t-right">相關係數</th>
+         <th class="t-right">60 日報酬</th></tr></thead><tbody>`
+      + peers.map(p => `<tr><td>${esc(p.name || p.code)}</td>
+          <td class="t-right num">${p.r.toFixed(2)}</td>
+          <td class="t-right num ${p.ret >= 0 ? "up" : "down"}">${sign(p.ret)}</td></tr>`).join("")
+      + `</tbody></table>`
+    : `<p class="hint" style="padding:2px 0">資料不足</p>`;
 }
 
 function renderWaves() {
@@ -2215,6 +2947,10 @@ function renderDetail() {
   renderChart(); renderReadout(); renderLegend(); renderMetrics(); renderEvents();
   updateCrosshair();
   renderWaves();
+  // 籌碼與財報都是非同步載入。先畫一次(沒有籌碼的版本),載完再畫一次,
+  // 這樣頁面不會為了等資料而整塊空白。
+  renderReport();
+  loadChips().then(() => { if (state.view === "detail") renderReport(); });
   loadFundamentals().then(() => { if (state.view === "detail") renderFundamentals(); });
 }
 
@@ -2224,6 +2960,7 @@ function render() {
   document.getElementById("view-research").hidden = state.view !== "research";
   document.querySelectorAll("#tabs button").forEach(b => b.classList.toggle("is-active", b.dataset.view === state.view));
   renderStatusSource();
+  renderFreshness();
   if (state.view === "scan") renderScan();
   else if (state.view === "research") renderResearch();
   else renderDetail();

@@ -53,6 +53,7 @@ def main() -> int:
         ("stocks.json", "seed-stocks", "行情"),
         ("backtest.json", "seed-backtest", "回測"),
         ("financials.json", "seed-financials", "財報"),
+        ("chips.json", "seed-chips", "籌碼"),
     ):
         data_path = os.path.join(ROOT, "docs", "data", filename)
         if not os.path.exists(data_path):

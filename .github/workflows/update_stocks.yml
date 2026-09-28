@@ -1,21 +1,37 @@
-name: 更新股市資料
+name: 每日更新股市資料
+
+# 排程只會從**預設分支**執行(GitHub 的規則),所以這個檔案要在 main 上
+# 才會真的自動跑。放在功能分支上只有 workflow_dispatch 有效。
 
 on:
-  # 手動觸發
   workflow_dispatch:
 
-  # 抓取邏輯(fetch_stocks.py 的 fetch_daily_bars)實作完成後,
-  # 取消下面的註解即可自動排程。
-  # 台股收盤後每天跑一次:台灣時間 15:10(UTC 07:10),週一至週五
-  #
-  # schedule:
-  #   - cron: "10 7 * * 1-5"
+  schedule:
+    # 兩個時段,都是 UTC。台灣 = UTC+8。
+    #
+    # 21:10 台北(UTC 13:10)週一~週五:收盤後跑,拿得到當日日線、
+    #   三大法人、本益比。
+    # 09:10 台北(UTC 01:10)週二~週六:回頭補前一個交易日的融資餘額。
+    #
+    # 為什麼要兩次:證交所各項資料公布時間不同。實測(本專案自己量的):
+    #   16:34 台北 → 融資 2 檔、評價 0 檔      (都還沒出來)
+    #   20:14 台北 → 融資 2 檔、評價 666 檔    (評價出來了,融資還沒)
+    # 融資餘額當晚拿不到,隔天早上一定有。fetch_chips 每次都重抓最近
+    # 30 個交易日,所以第二趟會自動把前一天補齊 —— 不需要額外的補洞邏輯。
+    - cron: "10 13 * * 1-5"
+    - cron: "10 1 * * 2-6"
+
+# 同時只跑一個,而且不砍進行中的:抓資料吃 API 配額,砍掉重練很貴
+concurrency:
+  group: update-stocks
+  cancel-in-progress: false
 
 jobs:
   update:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    timeout-minutes: 60
 
     steps:
       - name: 取得程式碼
@@ -27,16 +43,40 @@ jobs:
           python-version: "3.11"
 
       - name: 安裝套件
-        # 抓取邏輯若用到其他套件,加在這一行
-        run: pip install requests
+        run: pip install requests certifi
 
-      - name: 抓取日線資料
-        run: python fetch_stocks.py
+      # 1) 日線。非交易日會明說「非交易日」,請求失敗會明說失敗 ——
+      #    兩者混為一談就是 2026-09-07 在 672 檔裡消失的原因。
+      - name: 更新日線
+        run: python research/update_quotes.py
 
-      - name: 提交並推送更新
+      # 2) 補洞。看每個日期的覆蓋率,某天遠低於中位數就重抓那天。
+      #    自動排程一定會遇到網路抖動,沒有這一步洞會永遠留著:
+      #    回補視窗是從最後日期往後算的,補不到中間。
+      - name: 補回整天缺掉的交易日
+        run: python research/repair_quotes.py
+
+      # 3) 籌碼。走證交所/櫃買全市場日報,每天 5 個 request 涵蓋所有個股。
+      - name: 更新籌碼
+        run: python research/fetch_chips.py
+
+      # 4) 財報續抓。FinMind 配額以小時計,一輪約 95 檔;跑完就是 no-op。
+      #    只在早上那一趟跑,避免和籌碼搶同一小時的配額。
+      - name: 續抓財報
+        if: github.event.schedule == '10 1 * * 2-6' || github.event_name == 'workflow_dispatch'
+        run: python research/fetch_financials.py
+        continue-on-error: true
+
+      - name: 提交並推送
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add docs/data/stocks.json
-          git diff --cached --quiet || git commit -m "自動更新股市資料 $(TZ='Asia/Taipei' date '+%Y/%m/%d %H:%M')"
-          git push
+          git add docs/data
+          if git diff --cached --quiet; then
+            echo "資料沒有變化(可能是非交易日),不提交"
+            exit 0
+          fi
+          python3 -c "import json; d=json.load(open('docs/data/stocks.json')); c=json.load(open('docs/data/chips.json')); f=json.load(open('docs/data/financials.json')); n=len(d['stocks']); print('行情', d['dates'][-1], n, '檔 | 籌碼', c['dates'][-1], '| 財報', len(f['stocks']), '/', n)"
+          git commit -m "自動更新股市資料 $(TZ='Asia/Taipei' date '+%Y/%m/%d %H:%M')"
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+          git push origin "HEAD:${GITHUB_REF_NAME}"
