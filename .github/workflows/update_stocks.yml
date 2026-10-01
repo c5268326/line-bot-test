@@ -68,6 +68,7 @@ jobs:
         continue-on-error: true
 
       - name: 提交並推送
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -76,7 +77,50 @@ jobs:
             echo "資料沒有變化(可能是非交易日),不提交"
             exit 0
           fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
           python3 -c "import json; d=json.load(open('docs/data/stocks.json')); c=json.load(open('docs/data/chips.json')); f=json.load(open('docs/data/financials.json')); n=len(d['stocks']); print('行情', d['dates'][-1], n, '檔 | 籌碼', c['dates'][-1], '| 財報', len(f['stocks']), '/', n)"
           git commit -m "自動更新股市資料 $(TZ='Asia/Taipei' date '+%Y/%m/%d %H:%M')"
           git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
           git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      # 5) 同步到 gh-pages —— 這是網站真正讀到的那份資料。
+      #
+      #    Pages 用的是「分支來源」模式(deploy from a branch: gh-pages / root),
+      #    不是 Actions artifact 模式。會變成這樣是因為 Actions 的 GITHUB_TOKEN
+      #    不能「建立」Pages 站台,而推一個 gh-pages 分支會讓 GitHub 自動建站。
+      #
+      #    index.html 不內嵌資料,它開啟時才去抓同目錄的 data/*.json,
+      #    所以「部署」只要讓 gh-pages 上的 JSON 是新的就夠了 ——
+      #    不需要重新產生 HTML,也不需要任何人重新發佈什麼。
+      #    反過來說:忘了這一步的話,main 的資料再新,網站也不會動。
+      - name: 同步到 gh-pages
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          set -euo pipefail
+          git fetch origin gh-pages
+          git worktree add /tmp/ghp origin/gh-pages
+
+          # 先清空再整份複製,docs/ 刪掉的檔案在網站上才會跟著消失。
+          # 用 git rm 而不是 rm -rf:它只動受版控的檔案,不會碰到 .git。
+          # 不用 rsync —— runner 上有,但開發時的沙箱沒有,無法在推之前驗。
+          cd /tmp/ghp
+          git rm -rq .
+          cp -a "${GITHUB_WORKSPACE}/docs/." .
+          # .nojekyll 只該存在於 gh-pages:關掉 Jekyll,
+          # 否則底線開頭的檔案會被它吃掉。上一行清掉了,這裡補回來。
+          touch .nojekyll
+
+          # 和 deploy_pages.yml 同一道守門:公開網址上少了任何一個,
+          # 這個站就會變成搜尋得到的。寧可不更新,也不要靜悄悄地上線。
+          test -f /tmp/ghp/robots.txt || { echo "缺 robots.txt,不同步"; exit 1; }
+          grep -q 'name="robots" content="noindex' /tmp/ghp/index.html \
+            || { echo "index.html 沒有 noindex,不同步"; exit 1; }
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "gh-pages 已經是最新的,不提交"
+            exit 0
+          fi
+          git commit -m "同步網站資料 $(TZ='Asia/Taipei' date '+%Y/%m/%d %H:%M')"
+          git push origin HEAD:gh-pages
+          echo "已推上 gh-pages,Pages 會自動重新建置"
