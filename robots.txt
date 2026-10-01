@@ -1,0 +1,6 @@
+# 這個站不希望被搜尋引擎收錄 —— 它是給拿到連結的人看的。
+# 另外 index.html 的 <head> 也有 noindex meta:
+#   robots.txt 擋「爬取」,meta 擋「索引」。
+#   只有 robots.txt 的話,已經被別處連到的網址仍可能出現在搜尋結果裡。
+User-agent: *
+Disallow: /
